@@ -67,7 +67,7 @@ ssh snapshot-host 'nice -n 19 ionice -c 3 python3 - --bonds-only /path/to/snapsh
 jmstats import-bond-history tmp/bond-history.jsonl
 ```
 
-Hourly orderbook collection appends to both histories automatically. Fee ceilings for newly scanned CJs are inferred during chain collection from the transaction details it already fetches. Historical CJs need one explicit, bounded pass, optionally reading raw transactions from the analyzer cache before querying the API:
+Each orderbook collection appends to both histories automatically. Fee ceilings for newly scanned CJs are inferred during chain collection from the transaction details it already fetches. Historical CJs need one explicit, bounded pass, optionally reading raw transactions from the analyzer cache before querying the API:
 
 ```sh
 jmstats infer-cj-fees --days 365 --cache ../joinmarket_analyzer/tmp/jm_2025_2026.sqlite3
@@ -96,9 +96,9 @@ An explicit lower backfill floor does not prevent CI from extending the existing
 
 1. Push this repository yourself. Enable **Settings → Pages → Source → GitHub Actions**.
 2. Allow the workflow token to write repository contents. Branch rules must permit the bot's data commits.
-3. Run **Validate and publish dashboard** manually once, inspect the collection log and the deployed coverage panel, then leave its hourly schedule enabled.
+3. Run **Validate and publish dashboard** manually once, inspect the collection log and the deployed coverage panel, then leave its daily schedule enabled.
 
-The workflow tests, builds the same Docker image, collects, commits `data/`, and deploys `site/`. Public CI explicitly uses `https://mempool.space/api`, as requested. No credentials or local DNS overrides are included. Data-only commits do not retrigger the workflow. All production runs share a concurrency group. To run daily instead, change the cron to `23 3 * * *`.
+The workflow tests, builds the same Docker image, collects, commits `data/`, and deploys `site/` daily at 03:23 UTC. Public CI explicitly uses `https://mempool.space/api`, as requested. No credentials or local DNS overrides are included. Data-only commits do not retrigger the workflow. All production runs share a concurrency group.
 
 Requests are serial, paced two seconds apart, and limited to 600 attempts per run. This pacing is a conservative starting point, **not a documented safe public quota**. Raw blocks cost two requests each, plus transaction detail lookups only for above-floor candidates. Six confirmations are left uncollected. Public raw-block availability and quota must be checked on the first manual CI run.
 

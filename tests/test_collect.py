@@ -188,3 +188,64 @@ def test_explicit_cached_inference_does_not_use_legacy_solver_prices(tmp_path):
     result = infer_historical_fees(archive, NoNetwork(), cache=cache, cache_only=True)
     assert result["attempted"] == 1
     assert FeeHistory(tmp_path).records[api.txid].ceiling_sats == 18
+
+
+class ChainAPI:
+    """A valid chain of blocks, each with one distinct, analyzable candidate."""
+
+    def __init__(self, count):
+        self.blocks, previous = {}, MAINNET_GENESIS
+        for height in range(1, count + 1):
+            amount = 100_000 + height
+            raw, block_hash, txid = raw_block(
+                previous=previous, timestamp=1738368000 + 600 * height, amount=amount
+            )
+            self.blocks[height] = (raw, block_hash, txid, amount)
+            previous = block_hash
+        self.by_hash = {b[1]: b for b in self.blocks.values()}
+        self.by_txid = {b[2]: b for b in self.blocks.values()}
+
+    def text(self, path):
+        if path == "/block-height/0":
+            return MAINNET_GENESIS
+        if path == "/blocks/tip/height":
+            return str(len(self.blocks) + 6)
+        return self.blocks[int(path.removeprefix("/block-height/"))][1]
+
+    def fetch(self, path):
+        return self.by_hash[path.split("/")[2]][0]
+
+    def get(self, path):
+        _, block_hash, txid, amount = self.by_txid[path.removeprefix("/tx/")]
+        return {
+            "txid": txid,
+            "fee": 100,
+            "status": {"block_hash": block_hash},
+            "vin": [{"prevout": {"value": amount + v}} for v in (1130, 991, 982)],
+            "vout": [{"value": v} for v in [amount] * 3 + [1000, 1001, 1002]],
+        }
+
+
+def test_fee_evidence_is_durable_before_every_chain_checkpoint(tmp_path, monkeypatch):
+    import json
+
+    from jmstats import archive as archive_module
+
+    initialize(tmp_path, 1)
+    original, checkpoints = archive_module.atomic_write, []
+
+    def checked(path, text):
+        if path.parent.name == "chain":
+            # A kill right after this write must not leave archived candidates
+            # without stored amounts (update never revisits archived blocks).
+            stored = FeeStore(tmp_path).amounts
+            txids = [c[0] for line in text.splitlines() for c in json.loads(line)[4]]
+            assert txids and all(txid in stored for txid in txids)
+            checkpoints.append(len(txids))
+        original(path, text)
+
+    monkeypatch.setattr(archive_module, "atomic_write", checked)
+    result = collect_chain(Archive(tmp_path), ChainAPI(25), backfill=True)
+    assert result["blocks"] == 25
+    assert result["solver_outcomes"] == {"ambiguous": 25}
+    assert checkpoints == [20, 25]

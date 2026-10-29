@@ -92,6 +92,7 @@ def collect_chain(
     height = archive.next_height(backfill, from_height)
     fee_history = FeeHistory(archive.root)
     fees = FeeStore(archive.root) if solve_fees else None
+    archive.before_flush = fees.flush if fees is not None else None
     solver_outcomes = Counter()
     try:
         if client.text("/block-height/0") != MAINNET_GENESIS:
@@ -157,12 +158,13 @@ def collect_chain(
             "solver_outcomes": dict(solver_outcomes),
         }
     finally:
-        # Fee evidence first: amounts without archived blocks are harmless and
-        # deduplicated when the block is collected again.
+        # Fee evidence first, also at every chain checkpoint: amounts without
+        # archived blocks are harmless and deduplicated when collected again.
         if fees is not None:
             fees.flush()
         fee_history.flush()
         archive.flush()
+        archive.before_flush = None
         if backfill and from_height is not None and from_height < archive.state.scan_start:
             if all(h in archive.blocks for h in range(from_height, archive.state.scan_start)):
                 archive.state.scan_start = from_height

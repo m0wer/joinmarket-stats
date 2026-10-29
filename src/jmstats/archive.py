@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -69,6 +70,9 @@ class Archive:
         self.shards: dict[str, dict[int, list]] = {}
         self.dirty: str | None = None
         self.pending = 0
+        # Runs before each chain shard write, so evidence keyed to archived blocks
+        # is durable first (collection never revisits archived blocks).
+        self.before_flush: Callable[[], None] | None = None
         for path in sorted((root / "chain").glob("*.jsonl")):
             records = self.shards.setdefault(path.stem, {})
             for line in path.read_text().splitlines():
@@ -150,6 +154,8 @@ class Archive:
     def flush(self) -> None:
         if self.dirty is None:
             return
+        if self.before_flush is not None:
+            self.before_flush()
         records = self.shards[self.dirty]
         text = "".join(
             json.dumps(records[h], separators=(",", ":")) + "\n" for h in sorted(records)

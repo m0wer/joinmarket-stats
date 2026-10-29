@@ -1,74 +1,74 @@
 {
-  "as_of": "2026-10-29T13:08:45.251864+00:00",
-  "collected_at": "2026-10-29T13:09:03.583617+00:00",
-  "makers": 81,
-  "offer_count": 91,
+  "as_of": "2026-10-29T13:28:02.800903+00:00",
+  "collected_at": "2026-10-29T13:28:51.224508+00:00",
+  "makers": 80,
+  "offer_count": 90,
   "bond_count": 56,
   "locked_sats": 30852988981,
   "unknown_bonds": 1,
-  "bonded_makers": 58,
+  "bonded_makers": 60,
   "absolute_fees": {
     "mean": 1228.3548387096773,
     "median": 500
   },
   "relative_fees": {
-    "mean": 0.00038804614,
+    "mean": 0.0003941147186440678,
     "median": 0.0001
   },
   "capacity": [
     {
       "amount": 100000,
-      "makers": 27,
+      "makers": 28,
       "fee": {
-        "mean": 131.25925925925927,
-        "median": 10
+        "mean": 144.42857142857142,
+        "median": 15.0
       },
-      "weight": 34042032898
+      "weight": 34055060067
     },
     {
       "amount": 1000000,
-      "makers": 27,
+      "makers": 29,
       "fee": {
-        "mean": 268.14814814814815,
+        "mean": 284.13793103448273,
         "median": 100
       },
-      "weight": 34055405997
+      "weight": 34711430554
     },
     {
       "amount": 5000000,
-      "makers": 24,
+      "makers": 27,
       "fee": {
-        "mean": 1633.3333333333333,
-        "median": 500.0
+        "mean": 1655.5555555555557,
+        "median": 500
       },
-      "weight": 103309721086
+      "weight": 103968089943
     },
     {
       "amount": 10000000,
-      "makers": 24,
+      "makers": 26,
       "fee": {
-        "mean": 3400,
+        "mean": 3350,
         "median": 1000.0
       },
-      "weight": 103590055550
+      "weight": 104246180522
     },
     {
       "amount": 50000000,
-      "makers": 19,
+      "makers": 20,
       "fee": {
-        "mean": 15815.78947368421,
-        "median": 5000
+        "mean": 16275,
+        "median": 5000.0
       },
-      "weight": 104177513215
+      "weight": 104820510603
     },
     {
       "amount": 100000000,
-      "makers": 16,
+      "makers": 17,
       "fee": {
-        "mean": 36625,
-        "median": 10000.0
+        "mean": 37411.76470588235,
+        "median": 10000
       },
-      "weight": 104174412988
+      "weight": 104817410376
     },
     {
       "amount": 500000000,
@@ -82,76 +82,32 @@
   ],
   "offers": [
     {
-      "maker": 76,
-      "kind": "relative",
-      "min": 50000000,
-      "max": 100481981,
-      "fee": "0.0001",
+      "maker": 12,
+      "kind": "absolute",
+      "min": 27300,
+      "max": 6815846,
+      "fee": "0",
       "txfee": 0,
-      "weight": 602009121,
-      "bond": 55,
+      "weight": 33745,
+      "bond": 37,
       "grid": true
     },
     {
-      "maker": 76,
-      "kind": "absolute",
+      "maker": 68,
+      "kind": "relative",
       "min": 27300,
-      "max": 50000000,
-      "fee": "5000",
+      "max": 34597489692,
+      "fee": "0.00003",
       "txfee": 0,
-      "weight": 602009121,
-      "bond": 55,
-      "grid": true
+      "weight": 304002224755,
+      "bond": 57,
+      "grid": false
     },
     {
       "maker": 23,
       "kind": "relative",
-      "min": 100000,
-      "max": 3081630,
-      "fee": "0.0002",
-      "txfee": 0,
-      "weight": 1221880,
-      "bond": 14,
-      "grid": true
-    },
-    {
-      "maker": 26,
-      "kind": "relative",
-      "min": 10000000,
-      "max": 202355917,
-      "fee": "0.0005",
-      "txfee": 0,
-      "weight": 26878320,
-      "bond": 47,
-      "grid": true
-    },
-    {
-      "maker": 26,
-      "kind": "absolute",
-      "min": 100000,
-      "max": 10000000,
-      "fee": "5000",
-      "txfee": 0,
-      "weight": 26878320,
-      "bond": 47,
-      "grid": true
-    },
-    {
-      "maker": 67,
-      "kind": "relative",
-      "min": 100000,
-      "max": 58760414,
-      "fee": "0.00005",
-      "txfee": 0,
-      "weight": 5741,
-      "bond": 24,
-      "grid": true
-    },
-    {
-      "maker": 24,
-      "kind": "relative",
       "min": 1250000,
-      "max": 782150228,
+      "max": 909255882,
       "fee": "0.001",
       "txfee": 0,
       "weight": 11384967027,
@@ -159,80 +115,69 @@
       "grid": true
     },
     {
-      "maker": 71,
+      "maker": 4,
       "kind": "relative",
-      "min": 1088765,
-      "max": 132430489,
-      "fee": "0.00059",
+      "min": 27300,
+      "max": 24826627907,
+      "fee": "0.000025",
       "txfee": 0,
-      "weight": 914299345,
-      "bond": 35,
+      "weight": 37615069016,
+      "bond": 54,
       "grid": false
     },
     {
       "maker": 62,
       "kind": "absolute",
-      "min": 100000,
-      "max": 453023,
-      "fee": "100",
+      "min": 27300,
+      "max": 488695,
+      "fee": "500",
       "txfee": 0,
-      "weight": 275132,
-      "bond": 22,
+      "weight": 60130,
+      "bond": 42,
       "grid": true
     },
     {
-      "maker": 39,
-      "kind": "relative",
-      "min": 1350000,
-      "max": 177143868,
-      "fee": "0.001",
-      "txfee": 0,
-      "weight": 32154488686,
-      "bond": 13,
-      "grid": true
-    },
-    {
-      "maker": 40,
+      "maker": 35,
       "kind": "relative",
       "min": 100000,
-      "max": 130031831,
-      "fee": "0.0001",
+      "max": 229928565,
+      "fee": "0.0005",
       "txfee": 0,
-      "weight": 154799523,
-      "bond": 21,
+      "weight": 2874162521,
+      "bond": 19,
       "grid": true
     },
     {
       "maker": 19,
       "kind": "relative",
       "min": 100000,
-      "max": 147812051,
+      "max": 19055920,
       "fee": "0.0001",
       "txfee": 0,
-      "weight": 2147295058,
-      "bond": 5,
+      "weight": 2867974,
+      "bond": 16,
       "grid": true
     },
     {
-      "maker": 79,
+      "maker": 49,
       "kind": "relative",
-      "min": 5000000,
-      "max": 258448457,
+      "min": 3000000,
+      "max": 35528503,
       "fee": "0.0001",
       "txfee": 0,
-      "weight": 77695770,
-      "bond": 1,
+      "weight": 2707809,
+      "bond": 44,
       "grid": true
     },
     {
-      "maker": 79,
-      "kind": "absolute",
+      "maker": 66,
+      "kind": "relative",
       "min": 100000,
-      "max": 5000000,
-      "fee": "500",
+      "max": 58760414,
+      "fee": "0.00005",
       "txfee": 0,
-      "weight": 77695770,
-      "bond": 1,
+      "weight": 5741,
+      "bond": 24,
       "grid": true
     },
     {
@@ -258,248 +203,6 @@
       "grid": true
     },
     {
-      "maker": 54,
-      "kind": "relative",
-      "min": 91530,
-      "max": 61182142,
-      "fee": "0.0000195",
-      "txfee": 0,
-      "weight": 53317948,
-      "bond": 50,
-      "grid": false
-    },
-    {
-      "maker": 6,
-      "kind": "relative",
-      "min": 1295000,
-      "max": 259456267,
-      "fee": "0.001",
-      "txfee": 0,
-      "weight": 28917230815,
-      "bond": 0,
-      "grid": true
-    },
-    {
-      "maker": 18,
-      "kind": "relative",
-      "min": 27300,
-      "max": 13316588,
-      "fee": "0.001",
-      "txfee": 0,
-      "weight": 98396,
-      "bond": 9,
-      "grid": true
-    },
-    {
-      "maker": 4,
-      "kind": "relative",
-      "min": 27300,
-      "max": 26605625548,
-      "fee": "0.000025",
-      "txfee": 0,
-      "weight": 37616073215,
-      "bond": 54,
-      "grid": false
-    },
-    {
-      "maker": 1,
-      "kind": "relative",
-      "min": 1000000,
-      "max": 43690335,
-      "fee": "0.00005",
-      "txfee": 0,
-      "weight": 1757991,
-      "bond": 6,
-      "grid": true
-    },
-    {
-      "maker": 0,
-      "kind": "relative",
-      "min": 100000,
-      "max": 344247515,
-      "fee": "0.00002",
-      "txfee": 0,
-      "weight": 4873875,
-      "bond": 2,
-      "grid": true
-    },
-    {
-      "maker": 12,
-      "kind": "absolute",
-      "min": 27300,
-      "max": 6815846,
-      "fee": "0",
-      "txfee": 0,
-      "weight": 33745,
-      "bond": 37,
-      "grid": true
-    },
-    {
-      "maker": 69,
-      "kind": "relative",
-      "min": 27300,
-      "max": 34597489692,
-      "fee": "0.00003",
-      "txfee": 0,
-      "weight": 304002224755,
-      "bond": 57,
-      "grid": false
-    },
-    {
-      "maker": 31,
-      "kind": "relative",
-      "min": 1000000,
-      "max": 4845645,
-      "fee": "0.0005",
-      "txfee": 0,
-      "weight": 2243885,
-      "bond": 32,
-      "grid": true
-    },
-    {
-      "maker": 31,
-      "kind": "absolute",
-      "min": 27300,
-      "max": 1000000,
-      "fee": "500",
-      "txfee": 0,
-      "weight": 2243885,
-      "bond": 32,
-      "grid": true
-    },
-    {
-      "maker": 63,
-      "kind": "absolute",
-      "min": 27300,
-      "max": 488695,
-      "fee": "500",
-      "txfee": 0,
-      "weight": 60130,
-      "bond": 42,
-      "grid": true
-    },
-    {
-      "maker": 9,
-      "kind": "relative",
-      "min": 27300,
-      "max": 147032349,
-      "fee": "0.00002",
-      "txfee": 0,
-      "weight": 1469759,
-      "bond": 8,
-      "grid": true
-    },
-    {
-      "maker": 48,
-      "kind": "relative",
-      "min": 218813,
-      "max": 58396539,
-      "fee": "0.000150",
-      "txfee": 0,
-      "weight": 174063056,
-      "bond": 39,
-      "grid": false
-    },
-    {
-      "maker": 52,
-      "kind": "relative",
-      "min": 27300,
-      "max": 21364691,
-      "fee": "0.000002",
-      "txfee": 0,
-      "weight": 372493,
-      "bond": 30,
-      "grid": false
-    },
-    {
-      "maker": 17,
-      "kind": "relative",
-      "min": 256512,
-      "max": 4194304,
-      "fee": "0.0003",
-      "txfee": 0,
-      "weight": 5211288,
-      "bond": 52,
-      "grid": false
-    },
-    {
-      "maker": 17,
-      "kind": "absolute",
-      "min": 256512,
-      "max": 4194304,
-      "fee": "500",
-      "txfee": 0,
-      "weight": 5211288,
-      "bond": 52,
-      "grid": true
-    },
-    {
-      "maker": 73,
-      "kind": "relative",
-      "min": 106177,
-      "max": 191176247,
-      "fee": "0.0005",
-      "txfee": 0,
-      "weight": 0,
-      "bond": null,
-      "grid": true
-    },
-    {
-      "maker": 33,
-      "kind": "relative",
-      "min": 105109,
-      "max": 832251310,
-      "fee": "0.000028",
-      "txfee": 0,
-      "weight": 167772123,
-      "bond": 20,
-      "grid": false
-    },
-    {
-      "maker": 27,
-      "kind": "relative",
-      "min": 104107,
-      "max": 7134713,
-      "fee": "0.0002",
-      "txfee": 0,
-      "weight": 6743063,
-      "bond": 38,
-      "grid": true
-    },
-    {
-      "maker": 53,
-      "kind": "relative",
-      "min": 100000,
-      "max": 4346106147,
-      "fee": "0.001000",
-      "txfee": 0,
-      "weight": 22478604216,
-      "bond": 7,
-      "grid": true
-    },
-    {
-      "maker": 29,
-      "kind": "absolute",
-      "min": 27300,
-      "max": 1992131,
-      "fee": "1",
-      "txfee": 0,
-      "weight": 1438,
-      "bond": 51,
-      "grid": false
-    },
-    {
-      "maker": 45,
-      "kind": "absolute",
-      "min": 100000,
-      "max": 24775115,
-      "fee": "500",
-      "txfee": 0,
-      "weight": 0,
-      "bond": null,
-      "grid": true
-    },
-    {
       "maker": 3,
       "kind": "relative",
       "min": 2000000,
@@ -511,58 +214,36 @@
       "grid": false
     },
     {
-      "maker": 44,
+      "maker": 78,
+      "kind": "relative",
+      "min": 5000000,
+      "max": 274351479,
+      "fee": "0.0001",
+      "txfee": 0,
+      "weight": 77695770,
+      "bond": 1,
+      "grid": true
+    },
+    {
+      "maker": 78,
       "kind": "absolute",
-      "min": 92461,
-      "max": 24872258,
-      "fee": "0",
-      "txfee": 0,
-      "weight": 372586,
-      "bond": 53,
-      "grid": true
-    },
-    {
-      "maker": 36,
-      "kind": "relative",
       "min": 100000,
-      "max": 229928565,
-      "fee": "0.0005",
+      "max": 5000000,
+      "fee": "500",
       "txfee": 0,
-      "weight": 2874162521,
-      "bond": 19,
+      "weight": 77695770,
+      "bond": 1,
       "grid": true
     },
     {
-      "maker": 16,
+      "maker": 38,
       "kind": "relative",
-      "min": 5155489,
-      "max": 354043855,
-      "fee": "0.000034",
+      "min": 1350000,
+      "max": 212979685,
+      "fee": "0.001",
       "txfee": 0,
-      "weight": 340649668,
-      "bond": 43,
-      "grid": false
-    },
-    {
-      "maker": 20,
-      "kind": "relative",
-      "min": 100000,
-      "max": 19055920,
-      "fee": "0.0001",
-      "txfee": 0,
-      "weight": 2867974,
-      "bond": 16,
-      "grid": true
-    },
-    {
-      "maker": 50,
-      "kind": "relative",
-      "min": 3000000,
-      "max": 35528503,
-      "fee": "0.0001",
-      "txfee": 0,
-      "weight": 2707809,
-      "bond": 44,
+      "weight": 32154488686,
+      "bond": 13,
       "grid": true
     },
     {
@@ -577,7 +258,18 @@
       "grid": true
     },
     {
-      "maker": 46,
+      "maker": 18,
+      "kind": "relative",
+      "min": 100000,
+      "max": 140768998,
+      "fee": "0.0001",
+      "txfee": 0,
+      "weight": 2147295058,
+      "bond": 5,
+      "grid": true
+    },
+    {
+      "maker": 45,
       "kind": "absolute",
       "min": 27300,
       "max": 30027339,
@@ -588,7 +280,7 @@
       "grid": true
     },
     {
-      "maker": 43,
+      "maker": 42,
       "kind": "relative",
       "min": 10000000,
       "max": 14623756399,
@@ -599,7 +291,117 @@
       "grid": true
     },
     {
-      "maker": 74,
+      "maker": 17,
+      "kind": "relative",
+      "min": 27300,
+      "max": 13316588,
+      "fee": "0.001",
+      "txfee": 0,
+      "weight": 98396,
+      "bond": 9,
+      "grid": true
+    },
+    {
+      "maker": 1,
+      "kind": "relative",
+      "min": 1000000,
+      "max": 43690335,
+      "fee": "0.00005",
+      "txfee": 0,
+      "weight": 1757991,
+      "bond": 6,
+      "grid": true
+    },
+    {
+      "maker": 26,
+      "kind": "relative",
+      "min": 104107,
+      "max": 7134713,
+      "fee": "0.0002",
+      "txfee": 0,
+      "weight": 6743063,
+      "bond": 38,
+      "grid": true
+    },
+    {
+      "maker": 25,
+      "kind": "relative",
+      "min": 10000000,
+      "max": 202355917,
+      "fee": "0.0005",
+      "txfee": 0,
+      "weight": 26878320,
+      "bond": 47,
+      "grid": true
+    },
+    {
+      "maker": 25,
+      "kind": "absolute",
+      "min": 100000,
+      "max": 10000000,
+      "fee": "5000",
+      "txfee": 0,
+      "weight": 26878320,
+      "bond": 47,
+      "grid": true
+    },
+    {
+      "maker": 75,
+      "kind": "relative",
+      "min": 50000000,
+      "max": 100481981,
+      "fee": "0.0001",
+      "txfee": 0,
+      "weight": 602009121,
+      "bond": 55,
+      "grid": true
+    },
+    {
+      "maker": 75,
+      "kind": "absolute",
+      "min": 27300,
+      "max": 50000000,
+      "fee": "5000",
+      "txfee": 0,
+      "weight": 602009121,
+      "bond": 55,
+      "grid": true
+    },
+    {
+      "maker": 70,
+      "kind": "relative",
+      "min": 1088765,
+      "max": 141640231,
+      "fee": "0.00059",
+      "txfee": 0,
+      "weight": 914299345,
+      "bond": 35,
+      "grid": false
+    },
+    {
+      "maker": 30,
+      "kind": "absolute",
+      "min": 27300,
+      "max": 1000000,
+      "fee": "500",
+      "txfee": 0,
+      "weight": 2243885,
+      "bond": 32,
+      "grid": true
+    },
+    {
+      "maker": 61,
+      "kind": "absolute",
+      "min": 100000,
+      "max": 453023,
+      "fee": "100",
+      "txfee": 0,
+      "weight": 275132,
+      "bond": 22,
+      "grid": true
+    },
+    {
+      "maker": 73,
       "kind": "relative",
       "min": 5000000,
       "max": 144777238,
@@ -610,7 +412,7 @@
       "grid": true
     },
     {
-      "maker": 74,
+      "maker": 73,
       "kind": "absolute",
       "min": 27300,
       "max": 5000000,
@@ -621,7 +423,7 @@
       "grid": true
     },
     {
-      "maker": 51,
+      "maker": 50,
       "kind": "relative",
       "min": 100000,
       "max": 61732684,
@@ -632,7 +434,7 @@
       "grid": true
     },
     {
-      "maker": 56,
+      "maker": 55,
       "kind": "relative",
       "min": 100000,
       "max": 115536321,
@@ -643,29 +445,40 @@
       "grid": false
     },
     {
-      "maker": 60,
+      "maker": 30,
+      "kind": "relative",
+      "min": 1000000,
+      "max": 5025620,
+      "fee": "0.0005",
+      "txfee": 0,
+      "weight": 2243885,
+      "bond": 32,
+      "grid": true
+    },
+    {
+      "maker": 59,
       "kind": "relative",
       "min": 500000,
       "max": 23813922,
       "fee": "0.001",
       "txfee": 0,
-      "weight": 6746700,
+      "weight": 6746343,
       "bond": 33,
       "grid": true
     },
     {
-      "maker": 60,
+      "maker": 59,
       "kind": "absolute",
       "min": 100000,
       "max": 500000,
       "fee": "500",
       "txfee": 0,
-      "weight": 6746700,
+      "weight": 6746343,
       "bond": 33,
       "grid": true
     },
     {
-      "maker": 30,
+      "maker": 29,
       "kind": "relative",
       "min": 100000,
       "max": 8110145,
@@ -676,7 +489,29 @@
       "grid": true
     },
     {
-      "maker": 37,
+      "maker": 44,
+      "kind": "absolute",
+      "min": 100000,
+      "max": 24775115,
+      "fee": "500",
+      "txfee": 0,
+      "weight": 13127941,
+      "bond": 15,
+      "grid": true
+    },
+    {
+      "maker": 39,
+      "kind": "relative",
+      "min": 100000,
+      "max": 121110281,
+      "fee": "0.0001",
+      "txfee": 0,
+      "weight": 154799523,
+      "bond": 21,
+      "grid": true
+    },
+    {
+      "maker": 36,
       "kind": "relative",
       "min": 100000,
       "max": 406094226,
@@ -687,7 +522,40 @@
       "grid": true
     },
     {
-      "maker": 41,
+      "maker": 53,
+      "kind": "relative",
+      "min": 91530,
+      "max": 61182142,
+      "fee": "0.0000195",
+      "txfee": 0,
+      "weight": 53317948,
+      "bond": 50,
+      "grid": false
+    },
+    {
+      "maker": 6,
+      "kind": "relative",
+      "min": 1295000,
+      "max": 243781720,
+      "fee": "0.001",
+      "txfee": 0,
+      "weight": 28917230815,
+      "bond": 0,
+      "grid": true
+    },
+    {
+      "maker": 0,
+      "kind": "relative",
+      "min": 100000,
+      "max": 344247515,
+      "fee": "0.00002",
+      "txfee": 0,
+      "weight": 4873875,
+      "bond": 2,
+      "grid": true
+    },
+    {
+      "maker": 40,
       "kind": "absolute",
       "min": 27300,
       "max": 2157148,
@@ -698,7 +566,7 @@
       "grid": false
     },
     {
-      "maker": 32,
+      "maker": 31,
       "kind": "relative",
       "min": 27300,
       "max": 53848,
@@ -709,7 +577,7 @@
       "grid": false
     },
     {
-      "maker": 28,
+      "maker": 27,
       "kind": "relative",
       "min": 100449,
       "max": 17219423,
@@ -720,7 +588,7 @@
       "grid": false
     },
     {
-      "maker": 72,
+      "maker": 71,
       "kind": "relative",
       "min": 100000,
       "max": 284692,
@@ -731,7 +599,40 @@
       "grid": false
     },
     {
-      "maker": 49,
+      "maker": 22,
+      "kind": "relative",
+      "min": 100000,
+      "max": 3081630,
+      "fee": "0.0002",
+      "txfee": 0,
+      "weight": 1221880,
+      "bond": 14,
+      "grid": true
+    },
+    {
+      "maker": 16,
+      "kind": "relative",
+      "min": 256512,
+      "max": 4194304,
+      "fee": "0.0003",
+      "txfee": 0,
+      "weight": 5211288,
+      "bond": 52,
+      "grid": false
+    },
+    {
+      "maker": 16,
+      "kind": "absolute",
+      "min": 256512,
+      "max": 4194304,
+      "fee": "500",
+      "txfee": 0,
+      "weight": 5211288,
+      "bond": 52,
+      "grid": true
+    },
+    {
+      "maker": 48,
       "kind": "relative",
       "min": 100000,
       "max": 1253946,
@@ -742,7 +643,7 @@
       "grid": false
     },
     {
-      "maker": 70,
+      "maker": 69,
       "kind": "relative",
       "min": 273000,
       "max": 3157138712,
@@ -753,29 +654,29 @@
       "grid": false
     },
     {
-      "maker": 22,
-      "kind": "absolute",
-      "min": 27300,
-      "max": 1074915,
-      "fee": "250",
-      "txfee": 0,
-      "weight": 8695,
-      "bond": 27,
-      "grid": false
-    },
-    {
-      "maker": 59,
+      "maker": 72,
       "kind": "relative",
-      "min": 50000,
-      "max": 1107022,
-      "fee": "0.000001",
+      "min": 106177,
+      "max": 191176247,
+      "fee": "0.0005",
       "txfee": 0,
-      "weight": 0,
-      "bond": null,
-      "grid": false
+      "weight": 642997388,
+      "bond": 46,
+      "grid": true
     },
     {
-      "maker": 15,
+      "maker": 9,
+      "kind": "relative",
+      "min": 27300,
+      "max": 147032349,
+      "fee": "0.00002",
+      "txfee": 0,
+      "weight": 1469759,
+      "bond": 8,
+      "grid": true
+    },
+    {
+      "maker": 14,
       "kind": "absolute",
       "min": 27348,
       "max": 982157,
@@ -786,18 +687,84 @@
       "grid": false
     },
     {
-      "maker": 66,
+      "maker": 47,
+      "kind": "relative",
+      "min": 218813,
+      "max": 58396539,
+      "fee": "0.000150",
+      "txfee": 0,
+      "weight": 174063056,
+      "bond": 39,
+      "grid": false
+    },
+    {
+      "maker": 21,
+      "kind": "absolute",
+      "min": 27300,
+      "max": 1074915,
+      "fee": "250",
+      "txfee": 0,
+      "weight": 8695,
+      "bond": 27,
+      "grid": false
+    },
+    {
+      "maker": 51,
+      "kind": "relative",
+      "min": 27300,
+      "max": 21364691,
+      "fee": "0.000002",
+      "txfee": 0,
+      "weight": 372493,
+      "bond": 30,
+      "grid": false
+    },
+    {
+      "maker": 43,
+      "kind": "absolute",
+      "min": 92461,
+      "max": 24872258,
+      "fee": "0",
+      "txfee": 0,
+      "weight": 372586,
+      "bond": 53,
+      "grid": true
+    },
+    {
+      "maker": 58,
+      "kind": "relative",
+      "min": 50000,
+      "max": 1107022,
+      "fee": "0.000001",
+      "txfee": 0,
+      "weight": 0,
+      "bond": null,
+      "grid": false
+    },
+    {
+      "maker": 65,
       "kind": "absolute",
       "min": 27300,
       "max": 1000000,
       "fee": "100",
       "txfee": 0,
-      "weight": 3196402195,
+      "weight": 3196301780,
       "bond": 29,
       "grid": true
     },
     {
-      "maker": 58,
+      "maker": 15,
+      "kind": "relative",
+      "min": 5155489,
+      "max": 354043855,
+      "fee": "0.000034",
+      "txfee": 0,
+      "weight": 340649668,
+      "bond": 43,
+      "grid": false
+    },
+    {
+      "maker": 57,
       "kind": "relative",
       "min": 88000,
       "max": 10465454,
@@ -805,6 +772,28 @@
       "txfee": 0,
       "weight": 3381,
       "bond": 23,
+      "grid": false
+    },
+    {
+      "maker": 28,
+      "kind": "absolute",
+      "min": 27300,
+      "max": 1992131,
+      "fee": "1",
+      "txfee": 0,
+      "weight": 1438,
+      "bond": 51,
+      "grid": false
+    },
+    {
+      "maker": 32,
+      "kind": "relative",
+      "min": 105109,
+      "max": 832251310,
+      "fee": "0.000028",
+      "txfee": 0,
+      "weight": 167760516,
+      "bond": 20,
       "grid": false
     },
     {
@@ -819,7 +808,7 @@
       "grid": false
     },
     {
-      "maker": 61,
+      "maker": 60,
       "kind": "relative",
       "min": 103657,
       "max": 153069258,
@@ -830,7 +819,7 @@
       "grid": false
     },
     {
-      "maker": 34,
+      "maker": 33,
       "kind": "relative",
       "min": 50000,
       "max": 254936,
@@ -841,7 +830,18 @@
       "grid": true
     },
     {
-      "maker": 78,
+      "maker": 52,
+      "kind": "relative",
+      "min": 100000,
+      "max": 4346106147,
+      "fee": "0.001000",
+      "txfee": 0,
+      "weight": 22478604216,
+      "bond": 7,
+      "grid": true
+    },
+    {
+      "maker": 77,
       "kind": "relative",
       "min": 5000000,
       "max": 38145268,
@@ -852,7 +852,7 @@
       "grid": true
     },
     {
-      "maker": 78,
+      "maker": 77,
       "kind": "absolute",
       "min": 100000,
       "max": 5000000,
@@ -863,7 +863,7 @@
       "grid": true
     },
     {
-      "maker": 80,
+      "maker": 79,
       "kind": "relative",
       "min": 50000,
       "max": 2500274,
@@ -874,7 +874,7 @@
       "grid": true
     },
     {
-      "maker": 25,
+      "maker": 24,
       "kind": "absolute",
       "min": 100000,
       "max": 1424894,
@@ -885,7 +885,7 @@
       "grid": true
     },
     {
-      "maker": 21,
+      "maker": 20,
       "kind": "absolute",
       "min": 30128,
       "max": 17651763,
@@ -896,7 +896,7 @@
       "grid": true
     },
     {
-      "maker": 47,
+      "maker": 46,
       "kind": "absolute",
       "min": 100000,
       "max": 50330676,
@@ -907,7 +907,7 @@
       "grid": true
     },
     {
-      "maker": 57,
+      "maker": 56,
       "kind": "relative",
       "min": 100000,
       "max": 9806399,
@@ -918,7 +918,7 @@
       "grid": true
     },
     {
-      "maker": 35,
+      "maker": 34,
       "kind": "relative",
       "min": 1000000,
       "max": 1001942,
@@ -929,7 +929,7 @@
       "grid": true
     },
     {
-      "maker": 35,
+      "maker": 34,
       "kind": "absolute",
       "min": 30000,
       "max": 1000000,
@@ -940,7 +940,7 @@
       "grid": true
     },
     {
-      "maker": 64,
+      "maker": 63,
       "kind": "absolute",
       "min": 500000,
       "max": 4737811,
@@ -949,17 +949,6 @@
       "weight": 0,
       "bond": null,
       "grid": true
-    },
-    {
-      "maker": 13,
-      "kind": "relative",
-      "min": 27300,
-      "max": 36353054088,
-      "fee": "0.00003",
-      "txfee": 0,
-      "weight": 0,
-      "bond": null,
-      "grid": false
     },
     {
       "maker": 11,
@@ -973,7 +962,7 @@
       "grid": true
     },
     {
-      "maker": 14,
+      "maker": 13,
       "kind": "relative",
       "min": 98146,
       "max": 86911312,
@@ -984,7 +973,7 @@
       "grid": false
     },
     {
-      "maker": 55,
+      "maker": 54,
       "kind": "relative",
       "min": 100000,
       "max": 538477,
@@ -995,7 +984,7 @@
       "grid": false
     },
     {
-      "maker": 65,
+      "maker": 64,
       "kind": "absolute",
       "min": 108222,
       "max": 778519,
@@ -1017,7 +1006,7 @@
       "grid": true
     },
     {
-      "maker": 77,
+      "maker": 76,
       "kind": "relative",
       "min": 92894,
       "max": 8295001,
@@ -1028,7 +1017,7 @@
       "grid": false
     },
     {
-      "maker": 42,
+      "maker": 41,
       "kind": "relative",
       "min": 99999,
       "max": 308200251,
@@ -1039,7 +1028,7 @@
       "grid": true
     },
     {
-      "maker": 68,
+      "maker": 67,
       "kind": "relative",
       "min": 27300,
       "max": 161962798,
@@ -1061,7 +1050,7 @@
       "grid": false
     },
     {
-      "maker": 75,
+      "maker": 74,
       "kind": "absolute",
       "min": 27300,
       "max": 79615614,
@@ -1072,7 +1061,7 @@
       "grid": false
     },
     {
-      "maker": 38,
+      "maker": 37,
       "kind": "relative",
       "min": 27300,
       "max": 81351812,
@@ -1141,6 +1130,6 @@
     4000000000,
     10799994750
   ],
-  "advertised_bonded_makers": 58,
+  "advertised_bonded_makers": 60,
   "reported_locked_sats": 30852988981
 }

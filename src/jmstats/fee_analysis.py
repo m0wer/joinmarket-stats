@@ -1,150 +1,176 @@
-"""Durable solver attempts and reusable transaction amounts, separate from chain writes."""
+"""Immutable transaction amounts and method-versioned maker fee analyses.
+
+``data/amounts/<month>.jsonl`` holds ``[txid, timestamp, inputs, outputs]`` per
+CoinJoin candidate, so a new analysis method never needs a download. Amounts are
+facts about a txid; denomination and participants come from the chain archive.
+``data/fee-analyses/<month>.jsonl`` holds one solver result per txid for the
+method recorded in its ``state.json``. Unknown formats or methods fail closed.
+
+One fee writer owns both directories (lock in ``data/fee-analyses``),
+independently of the chain writer. Readers never initialize absent state.
+"""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal
-
-from pydantic import BaseModel, Field, model_validator
 
 from .archive import atomic_write, month_of, write_json
-from .solver import DEFAULT_SECONDS, METHOD, Amounts, Outcome, solve
+from .solver import METHOD, Amounts, Result
+
+AMOUNTS_STATE = {"schema_version": 1}
+ANALYSES_STATE = {"schema_version": 1, "method": METHOD}
+TXID = frozenset("0123456789abcdef")
 
 
-class Analysis(BaseModel):
-    txid: str = Field(pattern=r"^[0-9a-f]{64}$")
-    height: int = Field(ge=0)
-    block_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
-    timestamp: int = Field(ge=0)
-    method: Literal["conditional-cbc-v1"] = METHOD
-    seconds: float = Field(default=DEFAULT_SECONDS, gt=0, allow_inf_nan=False)
-    amounts: Amounts | None = None
-    status: Literal["started", "solved", "timeout", "infeasible", "error", "invalid"]
-    outcome: Outcome | None = None
-
-    @model_validator(mode="after")
-    def consistent(self):
-        if self.status == "started":
-            if self.amounts is None or self.outcome is not None:
-                raise ValueError("Started attempts need cached amounts, not a result")
-        elif self.outcome is None or self.outcome.status != self.status:
-            raise ValueError("Analysis status does not match its outcome")
-        if self.status != "invalid" and self.amounts is None:
-            raise ValueError("Analysis is missing reusable transaction amounts")
-        if self.outcome and self.outcome.witness:
-            self.outcome.witness.gains(self.amounts)
-        return self
-
-    @property
-    def maker_gains(self) -> list[int] | None:
-        if self.outcome and self.outcome.witness:
-            return self.outcome.witness.gains(self.amounts)
-        return None
-
-    @classmethod
-    def capture(
-        cls,
-        raw: dict,
-        *,
-        txid: str,
-        height: int,
-        block_hash: str,
-        timestamp: int,
-        denomination: int,
-        participants: int,
-        seconds: float = DEFAULT_SECONDS,
-    ) -> Analysis:
-        if raw.get("txid") != txid:
-            raise ValueError("Solver transaction ID does not match the archived candidate")
-        if raw.get("status", {}).get("block_hash", block_hash) != block_hash:
-            raise ValueError("Solver transaction is not in the archived block")
-        metadata = dict(
-            txid=txid, height=height, block_hash=block_hash, timestamp=timestamp, seconds=seconds
-        )
-        try:
-            amounts = Amounts(
-                inputs=[vin["prevout"]["value"] for vin in raw["vin"]],
-                outputs=[out["value"] for out in raw["vout"]],
-                denomination=denomination,
-                participants=participants,
-                network_fee=raw["fee"],
-            )
-        except (KeyError, TypeError, ValueError) as exc:
-            return cls(
-                **metadata,
-                status="invalid",
-                outcome=Outcome(status="invalid", detail=str(exc)[:300]),
-            )
-        return cls(**metadata, amounts=amounts, status="started")
+def capture(tx: dict, txid: str) -> tuple[list[int], list[int]]:
+    """Input and output amounts from an Esplora transaction, checked against its fee."""
+    if tx.get("txid") != txid:
+        raise ValueError("Transaction ID does not match the archived candidate")
+    inputs = [vin["prevout"]["value"] for vin in tx["vin"]]
+    outputs = [out["value"] for out in tx["vout"]]
+    if any(type(v) is not int or v < 0 for v in inputs + outputs):
+        raise ValueError("Invalid transaction amounts")
+    if sum(inputs) - sum(outputs) != tx["fee"]:
+        raise ValueError("Transaction amounts do not match the reported fee")
+    return inputs, outputs
 
 
-class SolutionHistory:
-    """A single solver writer, atomic monthly shards, immutable txid-keyed facts.
+def _metadata(directory: Path, expected: dict) -> list[Path]:
+    paths = sorted(directory.glob("*.jsonl"))
+    state = directory / "state.json"
+    if state.exists():
+        if json.loads(state.read_text()) != expected:
+            raise ValueError(f"Unknown {directory.name} format or method")
+    elif paths:
+        raise ValueError(f"{directory.name} metadata is missing")
+    return paths
 
-    Callers own the solver lock. Readers never initialize absent state. A durable
-    started record prevents an interrupted solve from silently restarting.
-    """
+
+def load_analyses(root: Path) -> dict[str, Result]:
+    """Read-only view for rendering; never creates state."""
+    directory = root / "fee-analyses"
+    records: dict[str, Result] = {}
+    for path in _metadata(directory, ANALYSES_STATE):
+        for line in path.read_text().splitlines():
+            record = json.loads(line)
+            txid = record.pop("txid")
+            if txid in records:
+                raise ValueError("Duplicate maker fee analysis")
+            records[txid] = Result.model_validate(record)
+    return records
+
+
+class FeeStore:
+    """The single fee writer's view: amounts and analyses, flushed in that order."""
 
     def __init__(self, root: Path):
-        self.root = root / "fee-solutions"
-        self.records: dict[str, Analysis] = {}
-        self.shards: dict[str, dict[str, Analysis]] = {}
-        state = self.root / "state.json"
-        paths = sorted(self.root.glob("*.jsonl"))
-        if state.exists():
-            if json.loads(state.read_text()) != {"schema_version": 1, "method": METHOD}:
-                raise ValueError("Unknown maker fee-solution format")
-        elif paths:
-            raise ValueError("Maker fee-solution metadata is missing")
-        for path in paths:
-            shard = self.shards.setdefault(path.stem, {})
+        self.amounts_dir = root / "amounts"
+        self.analyses_dir = root / "fee-analyses"
+        self.amounts: dict[str, tuple[int, list[int], list[int]]] = {}
+        self.months: dict[str, str] = {}
+        for path in _metadata(self.amounts_dir, AMOUNTS_STATE):
             for line in path.read_text().splitlines():
-                record = Analysis.model_validate_json(line)
-                if month_of(record.timestamp) != path.stem or record.txid in self.records:
-                    raise ValueError("Duplicate or misplaced maker fee solution")
-                self.records[record.txid] = record
-                shard[record.txid] = record
+                txid, timestamp, inputs, outputs = json.loads(line)
+                if (
+                    len(txid) != 64
+                    or not set(txid) <= TXID
+                    or type(timestamp) is not int
+                    or month_of(timestamp) != path.stem
+                    or txid in self.amounts
+                    or any(type(v) is not int or v < 0 for v in inputs + outputs)
+                    or sum(inputs) < sum(outputs)
+                ):
+                    raise ValueError("Invalid, duplicate, or misplaced transaction amounts")
+                self.amounts[txid] = (timestamp, inputs, outputs)
+                self.months[txid] = path.stem
+        self.analyses = load_analyses(root)
+        if not self.analyses.keys() <= self.amounts.keys():
+            raise ValueError("Maker fee analyses without stored amounts")
+        self.dirty: set[str] = set()
+        self.pending = 0
 
-    def _write(self, record: Analysis) -> None:
-        month = month_of(record.timestamp)
-        self.records[record.txid] = record
-        shard = self.shards.setdefault(month, {})
-        shard[record.txid] = record
-        state = self.root / "state.json"
-        if not state.exists():
-            write_json(state, {"schema_version": 1, "method": METHOD})
-        atomic_write(
-            self.root / f"{month}.jsonl",
-            "".join(
-                record.model_dump_json() + "\n"
-                for record in sorted(shard.values(), key=lambda r: (r.height, r.txid))
-            ),
+    def get(self, txid: str, denomination: int, participants: int) -> Amounts | None:
+        stored = self.amounts.get(txid)
+        if stored is None:
+            return None
+        _, inputs, outputs = stored
+        return Amounts(
+            inputs=inputs, outputs=outputs, denomination=denomination, participants=participants
         )
 
-    def run(self, record: Analysis, *, retry: bool = False) -> Analysis:
-        previous = self.records.get(record.txid)
-        if previous:
-            if previous.amounts is not None and record.amounts != previous.amounts:
-                raise ValueError("Conflicting immutable transaction amounts")
-            if not (retry and previous.status in ("started", "timeout", "error")):
-                return previous
-            # The same tx may be mined in a different block after a reorg. Its
-            # amounts and result remain valid; retain the original provenance.
-            record = previous.model_copy(update={"seconds": record.seconds})
-        if record.status in ("invalid", "solved", "infeasible"):
-            self._write(record)
-            return record
-        record = Analysis.model_validate(
-            {**record.model_dump(), "status": "started", "outcome": None}
-        )
-        self._write(record)
+    def get_safely(self, txid: str, denomination: int, participants: int) -> Amounts | None:
+        """Stored amounts that do not match the archived shape are reported, not analyzed."""
         try:
-            outcome = solve(record.amounts, record.seconds)
-        except Exception as exc:
-            outcome = Outcome(status="error", detail=f"{type(exc).__name__}: {exc}"[:300])
-        finished = Analysis.model_validate(
-            {**record.model_dump(), "status": outcome.status, "outcome": outcome.model_dump()}
-        )
-        self._write(finished)
-        return finished
+            return self.get(txid, denomination, participants)
+        except ValueError as exc:
+            print(f"Stored amounts for {txid} do not match the candidate: {exc}", flush=True)
+            return None
+
+    def add_amounts(self, txid: str, timestamp: int, inputs: list[int], outputs: list[int]):
+        previous = self.amounts.get(txid)
+        if previous is not None:
+            # A re-mined transaction keeps its first provenance; amounts never change.
+            if previous[1:] != (inputs, outputs):
+                raise ValueError("Conflicting immutable transaction amounts")
+            return
+        self.amounts[txid] = (timestamp, inputs, outputs)
+        self.months[txid] = month_of(timestamp)
+        self._touch(txid)
+
+    def add_analysis(self, txid: str, result: Result) -> None:
+        if txid not in self.amounts:
+            raise ValueError("Store transaction amounts before their analysis")
+        previous = self.analyses.get(txid)
+        if previous is not None:
+            if previous != result:
+                raise ValueError("Conflicting deterministic analysis; explicit migration required")
+            return
+        self.analyses[txid] = result
+        self._touch(txid)
+
+    def _touch(self, txid: str) -> None:
+        self.dirty.add(self.months[txid])
+        self.pending += 1
+        if self.pending >= 50:
+            self.flush()
+
+    def flush(self) -> None:
+        if not self.dirty:
+            return
+        by_month: dict[str, list[str]] = {}
+        for txid, month in self.months.items():
+            if month in self.dirty:
+                by_month.setdefault(month, []).append(txid)
+        # Amounts first: an interruption can leave amounts without analyses (the
+        # transaction is simply unanalyzed), never analyses without amounts.
+        if not (self.amounts_dir / "state.json").exists():
+            write_json(self.amounts_dir / "state.json", AMOUNTS_STATE)
+        for month, txids in by_month.items():
+            ordered = sorted(txids, key=lambda t: (self.amounts[t][0], t))
+            atomic_write(
+                self.amounts_dir / f"{month}.jsonl",
+                "".join(
+                    json.dumps([t, *self.amounts[t]], separators=(",", ":")) + "\n" for t in ordered
+                ),
+            )
+        analyzed = {m: [t for t in ts if t in self.analyses] for m, ts in by_month.items()}
+        if any(analyzed.values()) and not (self.analyses_dir / "state.json").exists():
+            write_json(self.analyses_dir / "state.json", ANALYSES_STATE)
+        for month, txids in analyzed.items():
+            if not txids:
+                continue
+            ordered = sorted(txids, key=lambda t: (self.amounts[t][0], t))
+            atomic_write(
+                self.analyses_dir / f"{month}.jsonl",
+                "".join(
+                    json.dumps(
+                        {"txid": t, **self.analyses[t].model_dump(exclude_defaults=True)},
+                        separators=(",", ":"),
+                    )
+                    + "\n"
+                    for t in ordered
+                ),
+            )
+        self.dirty.clear()
+        self.pending = 0

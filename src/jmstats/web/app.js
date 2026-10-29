@@ -83,52 +83,63 @@ function activityChart(months) {
   });
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly transaction bars and equal-output volume line, with separate left and right axes"><text x="${left}" y="10">Transactions</text><text x="${w - right}" y="10" text-anchor="end">BTC</text>${svg}<path class="volume-line" d="${line}"/></svg>`;
 }
+function feeSummary(m) {
+  return `${fmt(m.maker_fee_identified)} identified, ${fmt(m.maker_fee_ambiguous)} bounded, ${fmt(m.maker_fee_unresolved)} unresolved, ${fmt(m.maker_fee_unanalyzed)} unanalyzed; ${fmt(m.inconsistent)} inconsistent excluded`;
+}
 function makerFeesChart(months) {
   if (!months.length) return '<p class="empty">No scanned activity yet.</p>';
-  if (
-    !months.some(
-      (m) => m.count != null && m.conditional_gain_total_sats != null,
-    )
-  )
+  if (!months.some((m) => m.count != null && m.maker_fee_estimate_sats != null))
     return '<p class="empty">No maker fee estimates for this period.</p>';
   const w = Math.max(280, $("maker-fees-chart").clientWidth),
     h = $("maker-fees-chart").clientHeight,
     small = w < 600,
-    max = Math.max(1, ...months.map((m) => m.conditional_gain_total_sats || 0)),
+    max = Math.max(
+      1,
+      ...months.map((m) =>
+        Math.max(m.maker_fee_high_sats || 0, m.maker_fee_estimate_sats || 0),
+      ),
+    ),
     left = Math.max(55, fmt(max).length * 6 + 12),
-    right = 45,
+    right = 20,
     top = 20,
     bottom = 30,
     pw = w - left - right,
     ph = h - top - bottom,
-    step = pw / months.length;
-  let svg = "",
-    line = "",
-    connected = false;
+    step = pw / months.length,
+    y = (v) => top + ph - (v / max) * ph;
+  let svg = "";
   for (let i = 0; i <= 4; i++) {
-    const y = top + (ph * i) / 4;
-    svg += `<line class="axis" x1="${left}" x2="${w - right}" y1="${y}" y2="${y}"/><text x="${left - 10}" y="${y + 4}" text-anchor="end">${fmt(max * (1 - i / 4))}</text><text x="${w - right + 10}" y="${y + 4}">${100 - 25 * i}%</text>`;
+    const gy = top + (ph * i) / 4;
+    svg += `<line class="axis" x1="${left}" x2="${w - right}" y1="${gy}" y2="${gy}"/><text x="${left - 10}" y="${gy + 4}" text-anchor="end">${fmt(max * (1 - i / 4))}</text>`;
   }
   months.forEach((m, i) => {
     const x = left + step * (i + 0.5),
-      sample = `${fmt(m.solver_samples)} of ${fmt(m.count)} transactions solved`,
-      total = m.conditional_gain_total_sats;
+      bw = Math.max(1, step * 0.7),
+      total = m.maker_fee_estimate_sats;
     if (m.count == null || total == null) {
-      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "fee estimates unavailable; " + sample}</title></text>`;
+      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "no maker fee estimate; " + feeSummary(m)}</title></text>`;
     } else {
-      const bh = Math.max(1, (total / max) * ph);
-      svg += `<rect class="bar ${m.coverage === "complete" ? "" : "partial"}" x="${x - step * 0.35}" y="${top + ph - bh}" width="${Math.max(1, step * 0.7)}" height="${bh}" rx="1"><title>${m.month}: ${fmt(total)} sats conditional net maker gains; ${sample}; ${m.coverage} block coverage</title></rect>`;
+      const partial = m.coverage !== "complete" || m.maker_fee_partial,
+        title = `<title>${m.month}: ${fmt(total)} sats estimated, ${fmt(m.maker_fee_exact_sats)} exact, ${fmt(m.maker_fee_unresolved_sats)} for unresolved; range ${fmt(m.maker_fee_low_sats)} to ${fmt(m.maker_fee_high_sats)}; ${feeSummary(m)}; ${m.coverage} block coverage</title>`,
+        exactTop = y(m.maker_fee_exact_sats),
+        totalTop = Math.min(y(total), top + ph - 1);
+      svg += `<g class="fee-month">${title}`;
+      svg += `<rect class="bar fee-imputed" x="${x - bw / 2}" y="${totalTop}" width="${bw}" height="${exactTop - totalTop}"/>`;
+      svg += `<rect class="bar fee-exact" x="${x - bw / 2}" y="${exactTop}" width="${bw}" height="${top + ph - exactTop}"/>`;
+      if (partial)
+        svg += `<rect class="fee-partial" x="${x - bw / 2}" y="${totalTop}" width="${bw}" height="${top + ph - totalTop}"/>`;
+      if (m.maker_fee_high_sats > m.maker_fee_low_sats) {
+        const lo = y(m.maker_fee_low_sats),
+          hi = y(m.maker_fee_high_sats),
+          cap = Math.min(4, bw / 3);
+        svg += `<path class="fee-range" d="M${x},${lo}V${hi}M${x - cap},${lo}H${x + cap}M${x - cap},${hi}H${x + cap}"/>`;
+      }
+      svg += "</g>";
     }
-    if (m.count > 0) {
-      const y = top + ph * (1 - m.solver_samples / m.count);
-      line += `${connected ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)} `;
-      connected = true;
-      svg += `<circle class="fee-coverage-point" cx="${x}" cy="${y}" r="2"><title>${m.month}: ${sample}</title></circle>`;
-    } else connected = false;
     if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
       svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly conditional net maker gain totals in sats, with the percentage of transactions solved on the right axis"><text x="${left}" y="10">sats</text><text x="${w - right}" y="10" text-anchor="end">Solved</text>${svg}<path class="fee-coverage-line" d="${line}"/></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly estimated maker fee totals in sats: exact part, estimated part, and the range implied by proven per-transaction bounds">${svg}<text x="${left}" y="10">sats</text></svg>`;
 }
 function activity() {
   const months = dataset.months.filter(
@@ -137,9 +148,10 @@ function activity() {
   const seen = months.filter((m) => m.count !== null),
     latest =
       [...seen].reverse().find((m) => m.coverage === "complete") || seen.at(-1);
-  const label = latest
-    ? `${latest.month}, conditional fee sample`
-    : "No fee observations";
+  const label = (field) =>
+    latest
+      ? `${latest.month}, ${fmt(latest.maker_fee_fixed_slots)} exactly known makers; p90 ${field}`
+      : "No fee observations";
   $("coverage").textContent =
     `${months.filter((m) => m.coverage === "complete").length} of ${months.length} months fully scanned. ${months.filter((m) => m.coverage === "unscanned").length} unscanned. Latest block: ${dataset.last_scanned_at ? new Date(dataset.last_scanned_at).toLocaleString("en-US", { timeZone: "UTC" }) + " UTC" : "none"}.`;
   cards("activity-cards", [
@@ -168,16 +180,16 @@ function activity() {
       latest ? latest.month : "No observations",
     ],
     [
-      "Median estimated CJ fee",
-      fmt(latest?.conditional_gain_median),
+      "Median maker fee",
+      fmt(latest?.maker_fee_median_sats),
       "sat / maker",
-      label,
+      label(`${fmt(latest?.maker_fee_p90_sats)} sat`),
     ],
     [
-      "Median estimated relative fee",
-      rateValue(latest?.conditional_gain_median_percent),
+      "Median relative maker fee",
+      rateValue(latest?.maker_fee_median_percent),
       "%",
-      label,
+      label(rate(latest?.maker_fee_p90_percent)),
     ],
   ]);
   $("activity-chart").innerHTML = activityChart(months);
@@ -186,7 +198,7 @@ function activity() {
     .reverse()
     .map(
       (m) =>
-        `<tr><td>${m.month}</td><td>${m.coverage}</td><td>${fmt(m.count)}</td><td>${btc(m.volume_sats)}</td><td>${fmt(m.median_size_sats)}</td><td>${amount(m.median_participants)}</td><td>${fmt(m.conditional_gain_total_sats)}</td><td>${fmt(m.conditional_gain_median)}</td><td>${rate(m.conditional_gain_median_percent)}</td><td>${fmt(m.conditional_gain_mean)}</td><td>${rate(m.conditional_gain_percent)}</td><td>${fmt(m.solver_samples)} / ${fmt(m.count)}</td></tr>`,
+        `<tr><td>${m.month}</td><td>${m.coverage}</td><td>${fmt(m.count)}</td><td>${btc(m.volume_sats)}</td><td>${fmt(m.median_size_sats)}</td><td>${amount(m.median_participants)}</td><td>${fmt(m.maker_fee_estimate_sats)}${m.maker_fee_partial ? " (partial)" : ""}</td><td>${m.maker_fee_low_sats == null ? "N/A" : `${fmt(m.maker_fee_low_sats)} to ${fmt(m.maker_fee_high_sats)}`}</td><td>${fmt(m.maker_fee_exact_sats)}</td><td>${fmt(m.maker_fee_mean_sats)}</td><td>${rate(m.maker_fee_mean_percent)}</td><td>${fmt(m.maker_fee_median_sats)}</td><td>${rate(m.maker_fee_median_percent)}</td><td>${fmt(m.maker_fee_p90_sats)}</td><td>${rate(m.maker_fee_p90_percent)}</td><td>${fmt(m.maker_fee_fixed_slots)} / ${fmt(m.maker_fee_slots)}</td><td>${[m.maker_fee_identified, m.maker_fee_ambiguous, m.maker_fee_unresolved, m.maker_fee_unanalyzed].map((v) => fmt(v)).join(" / ")}</td><td>${fmt(m.inconsistent)}</td></tr>`,
     )
     .join("");
 }
@@ -356,7 +368,7 @@ async function start() {
     const response = await fetch("data.json", { cache: "no-cache" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     dataset = await response.json();
-    if (dataset.schema_version !== 1)
+    if (dataset.schema_version !== 2)
       throw new Error("Unsupported data version");
     // Hide leading unscanned months, but retain later gaps and scanned zeroes.
     const firstScanned = dataset.months.findIndex((m) => m.count !== null);

@@ -70,18 +70,23 @@
         </article>
         <article class="panel">
           <div class="panel-head">
-            <h3>Monthly maker fee totals (solved transactions)</h3>
+            <h3>Monthly maker fee totals</h3>
             <div class="legend">
-              <span class="green">Net gains, sats</span>
-              <span class="blue">Transactions solved, %</span>
+              <span class="green">Exact, sats</span>
+              <span class="green-soft">Estimated</span>
+              <span class="gold">Proven range</span>
             </div>
           </div>
           <div id="maker-fees-chart" class="chart" aria-live="polite"></div>
           <p class="caption">
-            Conditional net maker gains, not observed gross fees. Totals cover
-            solved transactions only; the blue line shows their share of
-            detected transactions. Missing estimates are not zero or
-            extrapolated. Outlined bars have partial block coverage.
+            Net maker gains (fees minus any network fee contribution), not
+            observed gross payments. Each transaction is searched exactly. Dark
+            bars are totals known exactly; light bars add estimates for
+            transactions whose decomposition is ambiguous or exceeds the search
+            budget, from fee rates of identified transactions of similar size.
+            Whiskers show the range implied by proven per-transaction bounds.
+            Transactions inconsistent with JoinMarket are excluded. Dashed
+            outlines mark partial months.
           </p>
         </article>
         <details class="panel">
@@ -96,20 +101,28 @@
                   <th>Volume, BTC</th>
                   <th>Median CJ, sat</th>
                   <th>Participants</th>
-                  <th>Sampled fee total, sat</th>
-                  <th>Median fee, sat</th>
-                  <th>Median relative fee</th>
+                  <th>Maker fees, sat</th>
+                  <th>Proven range, sat</th>
+                  <th>Exact part, sat</th>
                   <th>Mean fee, sat</th>
                   <th>Mean relative fee</th>
-                  <th>Fee samples</th>
+                  <th>Median fee, sat</th>
+                  <th>Median relative fee</th>
+                  <th>p90 fee, sat</th>
+                  <th>p90 relative fee</th>
+                  <th>Known makers</th>
+                  <th>Identified / bounded / unresolved / unanalyzed</th>
+                  <th>Inconsistent</th>
                 </tr>
               </thead>
               <tbody id="monthly-table"></tbody>
             </table>
           </div>
           <p class="caption">
-            Fees are estimated net maker gains, not observed gross payments.
-            Participants are inferred from equal outputs.
+            Fees are net maker gains, not observed gross payments. Medians and
+            p90 use makers whose gain is identical in every valid
+            decomposition, weighted by denomination decade. Participants are
+            inferred from equal outputs.
           </p>
           <a class="download" href="monthly.csv" download>Download CSV</a>
         </details>

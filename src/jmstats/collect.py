@@ -6,6 +6,7 @@ import json
 import sqlite3
 import time
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from statistics import median
@@ -15,12 +16,12 @@ from pydantic import BaseModel, Field, field_validator
 from .archive import DETECTOR, Archive, State, write_json
 from .blocks import scan_block
 from .bond_history import merge_bond_history
-from .fee_analysis import Analysis, SolutionHistory
+from .fee_analysis import FeeStore, capture
 from .http import Deferred, JsonClient
 from .inference import FeeHistory, infer_fee_record
 from .market import normalize_market
 from .snapshots import reduce_bond_snapshot, reduce_snapshot
-from .solver import DEFAULT_SECONDS
+from .solver import Amounts, Result, analyze
 
 MAINNET_GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
 
@@ -84,16 +85,13 @@ def collect_chain(
     max_blocks=200,
     from_height=None,
     solve_fees=True,
-    solver_seconds=DEFAULT_SECONDS,
 ) -> dict:
-    if not 0 < solver_seconds < float("inf"):
-        raise ValueError("Solver seconds must be positive and finite")
     completed = 0
     if archive.state.cooldown_until > time.time():
         return {"status": "cooldown", "until": archive.state.cooldown_until, "blocks": 0}
     height = archive.next_height(backfill, from_height)
     fee_history = FeeHistory(archive.root)
-    solutions = SolutionHistory(archive.root) if solve_fees else None
+    fees = FeeStore(archive.root) if solve_fees else None
     solver_outcomes = Counter()
     try:
         if client.text("/block-height/0") != MAINNET_GENESIS:
@@ -130,20 +128,8 @@ def collect_chain(
                 if type(fee) is not int or fee < 0:
                     raise ValueError("Invalid transaction fee")
                 candidate[3] = fee
-                if solutions is not None:
-                    analysis = solutions.run(
-                        Analysis.capture(
-                            tx,
-                            txid=candidate[0],
-                            height=height,
-                            block_hash=block_hash,
-                            timestamp=block["timestamp"],
-                            denomination=candidate[1],
-                            participants=candidate[2],
-                            seconds=solver_seconds,
-                        )
-                    )
-                    solver_outcomes[analysis.status] += 1
+                if fees is not None:
+                    solver_outcomes[_collect_fee(fees, tx, candidate, block["timestamp"])] += 1
                 if candidate[0] not in fee_history.records:
                     fee_history.add(
                         infer_fee_record(
@@ -171,6 +157,10 @@ def collect_chain(
             "solver_outcomes": dict(solver_outcomes),
         }
     finally:
+        # Fee evidence first: amounts without archived blocks are harmless and
+        # deduplicated when the block is collected again.
+        if fees is not None:
+            fees.flush()
         fee_history.flush()
         archive.flush()
         if backfill and from_height is not None and from_height < archive.state.scan_start:
@@ -186,6 +176,48 @@ def collect_chain(
     }
 
 
+RAW_TX_QUERY = "SELECT json_extract(payload, '$.raw_tx') FROM analyses WHERE txid = ?"
+
+
+class _Bounded(Exception):
+    """This invocation reached its explicit transaction or time limit."""
+
+
+def _captured(tx: dict, txid: str) -> tuple[list[int], list[int]] | None:
+    """Malformed or unbalanced amounts are reported and leave the tx unanalyzed."""
+    try:
+        return capture(tx, txid)
+    except (KeyError, TypeError, ValueError) as exc:
+        print(f"Unusable amounts for {txid}: {type(exc).__name__}: {exc}", flush=True)
+        return None
+
+
+def _collect_fee(fees: FeeStore, tx: dict, candidate: list, timestamp: int) -> str:
+    txid = candidate[0]
+    amounts = _captured(tx, txid)
+    if amounts is None:
+        return "invalid"
+    fees.add_amounts(txid, timestamp, *amounts)
+    if txid in fees.analyses:
+        return "retained"
+    result = _analyze_safely(fees.get_safely(*candidate[:3]))
+    if result is None:
+        return "error"
+    fees.add_analysis(txid, result)
+    return result.status
+
+
+def _analyze_safely(amounts: Amounts | None) -> Result | None:
+    """A solver defect or a mismatched shape leaves the transaction unanalyzed."""
+    if amounts is None:
+        return None
+    try:
+        return analyze(amounts)
+    except Exception as exc:
+        print(f"Maker fee analysis failed: {type(exc).__name__}: {exc}", flush=True)
+        return None
+
+
 def analyze_fees(
     root: Path,
     client: JsonClient,
@@ -196,108 +228,107 @@ def analyze_fees(
     to_height: int | None = None,
     max_transactions: int = 200,
     max_seconds: float = 900,
-    solver_seconds: float = DEFAULT_SECONDS,
-    retry: bool = False,
+    jobs: int = 1,
 ) -> dict:
-    """Explicit solver-only pass. Never write chain state or acquire its writer lock."""
+    """Explicit fee-only pass. Never write chain state or acquire its writer lock.
+
+    Stored amounts are analyzed offline. Missing amounts come from a read-only
+    analyzer cache, then (unless cache-only) from the API, and are stored first.
+    """
     if (
         from_height < 0
         or (to_height is not None and to_height < from_height)
         or max_transactions < 1
         or not 0 < max_seconds < float("inf")
-        or not 0 < solver_seconds < float("inf")
+        or jobs < 1
         or (cache_only and cache is None)
     ):
-        raise ValueError("Invalid solver analysis scope")
+        raise ValueError("Invalid fee analysis scope")
     archive = Archive(root)
     # Each shard was read atomically. The concurrent collector can extend this
     # snapshot, but this function has no mutable chain reference after this point.
     blocks = sorted(archive.blocks.values(), key=lambda block: block[0])
     del archive
-    history = SolutionHistory(root)
+    fees = FeeStore(root)
     database = sqlite3.connect(cache.resolve().as_uri() + "?mode=ro", uri=True) if cache else None
-    counts = Counter()
-    attempted, missing, imported = 0, 0, 0
+    executor = ProcessPoolExecutor(jobs) if jobs > 1 else None
+    counts, sources = Counter(), Counter()
+    pending: list[tuple[str, Amounts | None]] = []
     started = time.monotonic()
     network_checked = False
-    result = {"status": "ok"}
-    try:
-        for height, block_hash, timestamp, _, candidates in blocks:
-            if height < from_height or (to_height is not None and height > to_height):
-                continue
-            for txid, denomination, participants, _, _, legacy_gain in candidates:
-                if denomination < 75_000:
-                    continue
-                previous = history.records.get(txid)
-                if previous:
-                    if not (retry and previous.status in ("started", "timeout", "error")):
-                        continue
-                    record = previous.model_copy(update={"seconds": solver_seconds})
-                elif legacy_gain is not None:
-                    imported += 1
-                    continue
-                else:
-                    record = None
-                if attempted >= max_transactions or time.monotonic() - started >= max_seconds:
-                    result["status"] = "bounded"
-                    return {
-                        **result,
-                        "attempted": attempted,
-                        "outcomes": dict(counts),
-                        "cache_misses": missing,
-                        "retained_imported": imported,
-                    }
-                if record is None:
-                    cached = (
-                        database.execute(
-                            "SELECT json_extract(payload,'$.raw_tx') FROM analyses WHERE txid=?",
-                            (txid,),
-                        ).fetchone()
-                        if database
-                        else None
-                    )
-                    if cached and cached[0]:
-                        raw = json.loads(cached[0])
-                    elif cache_only:
-                        missing += 1
-                        continue
-                    else:
-                        if not network_checked:
-                            if client.text("/block-height/0") != MAINNET_GENESIS:
-                                raise ValueError("The configured API is not Bitcoin mainnet")
-                            network_checked = True
-                        raw = client.get(f"/tx/{txid}")
-                    if raw.get("status", {}).get("block_hash") != block_hash:
-                        raise ValueError("Solver transaction is not in the expected block")
-                    record = Analysis.capture(
-                        raw,
-                        txid=txid,
-                        height=height,
-                        block_hash=block_hash,
-                        timestamp=timestamp,
-                        denomination=denomination,
-                        participants=participants,
-                        seconds=solver_seconds,
-                    )
-                outcome = history.run(record, retry=retry)
-                attempted += 1
+    result: dict = {"status": "ok"}
+
+    def drain():
+        work = [amounts for _, amounts in pending]
+        mapped = (
+            executor.map(_analyze_safely, work, chunksize=4)
+            if executor
+            else map(_analyze_safely, work)
+        )
+        for (txid, _), outcome in zip(pending, mapped, strict=True):
+            if outcome is None:
+                counts["error"] += 1
+            else:
+                fees.add_analysis(txid, outcome)
                 counts[outcome.status] += 1
-                if attempted % 25 == 0:
-                    print(f"Analyzed {attempted} transactions: {dict(counts)}", flush=True)
-    except Deferred as exc:
-        # The chain writer owns state.json. Updating its cooldown here would
-        # overwrite concurrent progress. The caller must honor this defer signal.
-        result.update(status="deferred", reason=str(exc), cooldown=exc.cooldown)
+        pending.clear()
+        print(f"Analyzed {sum(counts.values())} transactions: {dict(counts)}", flush=True)
+
+    try:
+        try:
+            for height, block_hash, timestamp, _, candidates in blocks:
+                if height < from_height or (to_height is not None and height > to_height):
+                    continue
+                for txid, denomination, participants, *_ in candidates:
+                    if denomination < 75_000 or txid in fees.analyses:
+                        continue
+                    if (
+                        sum(counts.values()) + len(pending) >= max_transactions
+                        or time.monotonic() - started >= max_seconds
+                    ):
+                        result["status"] = "bounded"
+                        raise _Bounded
+                    if txid not in fees.amounts:
+                        raw = None
+                        if database:
+                            row = database.execute(RAW_TX_QUERY, (txid,)).fetchone()
+                            raw = json.loads(row[0]) if row and row[0] else None
+                            if raw is not None:
+                                sources["cache"] += 1
+                        if raw is None:
+                            if cache_only:
+                                sources["cache_miss"] += 1
+                                continue
+                            if not network_checked:
+                                if client.text("/block-height/0") != MAINNET_GENESIS:
+                                    raise ValueError("The configured API is not Bitcoin mainnet")
+                                network_checked = True
+                            raw = client.get(f"/tx/{txid}")
+                            sources["network"] += 1
+                        if raw.get("status", {}).get("block_hash") != block_hash:
+                            raise ValueError("Fee transaction is not in the expected block")
+                        amounts = _captured(raw, txid)
+                        if amounts is None:
+                            counts["invalid"] += 1
+                            continue
+                        fees.add_amounts(txid, timestamp, *amounts)
+                    pending.append((txid, fees.get_safely(txid, denomination, participants)))
+                    if len(pending) >= 64 * jobs:
+                        drain()
+        except _Bounded:
+            pass
+        except Deferred as exc:
+            # The chain writer owns state.json. Updating its cooldown here would
+            # overwrite concurrent progress. The caller must honor this defer signal.
+            result.update(status="deferred", reason=str(exc), cooldown=exc.cooldown)
+        drain()
     finally:
+        fees.flush()
+        if executor:
+            executor.shutdown(cancel_futures=True)
         if database:
             database.close()
-    return {
-        **result,
-        "attempted": attempted,
-        "outcomes": dict(counts),
-        "cache_misses": missing,
-        "retained_imported": imported,
-    }
+    return {**result, "outcomes": dict(counts), "sources": dict(sources)}
 
 
 def infer_historical_fees(

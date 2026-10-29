@@ -5,7 +5,7 @@ from conftest import raw_block
 
 from jmstats.archive import Archive
 from jmstats.collect import MAINNET_GENESIS, collect_chain, infer_historical_fees, initialize
-from jmstats.fee_analysis import SolutionHistory
+from jmstats.fee_analysis import FeeStore, load_analyses
 from jmstats.http import Deferred
 from jmstats.inference import FeeHistory
 
@@ -117,15 +117,31 @@ def test_new_candidates_get_prior_free_fee_evidence(tmp_path):
     assert record.status == "inferred"
     assert record.ceiling_sats == 18
     assert record.ceiling_sats == max(record.maker_gains)
-    assert result["solver_outcomes"] == {"solved": 1}
-    assert SolutionHistory(tmp_path).records[api.txid].status == "solved"
+    assert result["solver_outcomes"] == {"ambiguous": 1}
+    analysis = load_analyses(tmp_path)[api.txid]
+    assert (analysis.status, analysis.low, analysis.high) == ("ambiguous", 28, 30)
+    assert FeeStore(tmp_path).get(api.txid, 100_000, 3).network_fee == 100
+    # Collecting the same block again (after a rollback) reuses the analysis.
+    Archive(tmp_path).rollback(0)
+    again = collect_chain(Archive(tmp_path), api, backfill=True)
+    assert again["solver_outcomes"] == {"retained": 1}
+
+
+def test_unusable_amounts_do_not_stop_collection(tmp_path):
+    initialize(tmp_path, 1)
+    result = collect_chain(Archive(tmp_path), FakeAPI(), backfill=True)
+    assert result["blocks"] == 1
+    assert result["solver_outcomes"] == {"invalid": 1}
+    assert not (tmp_path / "amounts").exists()
+    assert not (tmp_path / "fee-analyses").exists()
 
 
 def test_collection_can_leave_solver_to_independent_process(tmp_path):
     initialize(tmp_path, 1)
     result = collect_chain(Archive(tmp_path), FakeAPI(), backfill=True, solve_fees=False)
     assert result["solver_outcomes"] == {}
-    assert not (tmp_path / "fee-solutions").exists()
+    assert not (tmp_path / "amounts").exists()
+    assert not (tmp_path / "fee-analyses").exists()
 
 
 def test_explicit_cached_inference_does_not_use_legacy_solver_prices(tmp_path):

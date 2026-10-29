@@ -19,7 +19,6 @@ from .collect import (
 )
 from .http import JsonClient
 from .render import render
-from .solver import DEFAULT_SECONDS
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,9 +51,8 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument("--interval", type=float, default=2.0)
         command.add_argument("--request-budget", type=int, default=600)
         command.add_argument("--max-blocks", type=int, default=200)
-        command.add_argument("--solver-seconds", type=float, default=DEFAULT_SECONDS)
         command.add_argument(
-            "--no-solver", action="store_true", help="Collect only, for a separate solver writer"
+            "--no-solver", action="store_true", help="Collect only, for a separate fee writer"
         )
         command.add_argument(
             "--backfill",
@@ -90,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
     infer.add_argument("--request-budget", type=int, default=600)
     infer.add_argument("--max-transactions", type=int, default=20_000)
     analyze = commands.add_parser(
-        "analyze-fees", help="Explicitly solve archived CJs, independently of the chain writer"
+        "analyze-fees", help="Explicitly analyze archived CJ fees, apart from the chain writer"
     )
     analyze.add_argument("--cache", type=Path, help="Read-only analyzer raw-transaction cache")
     analyze.add_argument("--cache-only", action="store_true")
@@ -98,10 +96,7 @@ def main(argv: list[str] | None = None) -> int:
     analyze.add_argument("--to-height", type=int)
     analyze.add_argument("--max-transactions", type=int, default=200)
     analyze.add_argument("--max-seconds", type=float, default=900)
-    analyze.add_argument("--solver-seconds", type=float, default=DEFAULT_SECONDS)
-    analyze.add_argument(
-        "--retry", action="store_true", help="Retry interrupted, timed-out, or errored attempts"
-    )
+    analyze.add_argument("--jobs", type=int, default=1, help="Parallel solver processes")
     analyze.add_argument("--api", default="https://mempool.sgn.space/api")
     analyze.add_argument("--interval", type=float, default=2.0)
     analyze.add_argument("--request-budget", type=int, default=600)
@@ -109,11 +104,11 @@ def main(argv: list[str] | None = None) -> int:
     locks = []
     try:
         if args.command == "analyze-fees":
-            locks.append(acquire_lock(args.data / "fee-solutions"))
+            locks.append(acquire_lock(args.data / "fee-analyses"))
         elif args.command != "render":
             locks.append(acquire_lock(args.data))
             if args.command in ("sync", "update") and not args.no_solver:
-                locks.append(acquire_lock(args.data / "fee-solutions"))
+                locks.append(acquire_lock(args.data / "fee-analyses"))
         if args.command == "init":
             initialize(args.data, args.start_height)
             result = {"status": "initialized"}
@@ -146,8 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                 to_height=args.to_height,
                 max_transactions=args.max_transactions,
                 max_seconds=args.max_seconds,
-                solver_seconds=args.solver_seconds,
-                retry=args.retry,
+                jobs=args.jobs,
             )
         elif args.command == "render":
             result = render(args.data, args.output)
@@ -173,7 +167,6 @@ def main(argv: list[str] | None = None) -> int:
                     max_blocks=args.max_blocks,
                     from_height=args.from_height,
                     solve_fees=not args.no_solver,
-                    solver_seconds=args.solver_seconds,
                 )
                 if result["chain"].get("solver_outcomes", {}).get("error", 0):
                     failed = True

@@ -7,9 +7,10 @@ from jmstats.archive import Archive, acquire_lock, write_json
 from jmstats.cli import main
 from jmstats.collect import initialize
 from jmstats.render import monthly_stats, render
+from jmstats.solver import Result
 
 
-def test_utc_coverage_gaps_and_conditional_sample(tmp_path):
+def test_utc_coverage_gaps_and_maker_fee_fields(tmp_path):
     initialize(tmp_path, 1)
     a = Archive(tmp_path)
     # One contiguous segment bracketing January, a gap before March.
@@ -30,108 +31,69 @@ def test_utc_coverage_gaps_and_conditional_sample(tmp_path):
     a.add([3, "03" * 32, 1580529600, 1, []])
     a.add([5, "05" * 32, 1583100000, 1, []])
     a.flush()
-    months = monthly_stats(
-        a, datetime(2020, 4, 1, tzinfo=UTC), {"2020-01": {"median_sats": 50, "median_ppm": 2000}}
-    )
+    now = datetime(2020, 4, 1, tzinfo=UTC)
+    analyses = {
+        "ab" * 32: Result(status="identified", low=100, high=100, gains=[40, 60]),
+        "ef" * 32: Result(status="identified", low=7, high=7),  # Below the floor.
+        "99" * 32: Result(status="identified", low=9, high=9),  # Not archived.
+    }
+    months = monthly_stats(a, now, analyses)
     january = months[0]
     assert january["coverage"] == "complete"
     assert january["count"] == 2
     assert january["volume_sats"] == 1_300_000
     assert january["median_size_sats"] == 150_000
-    assert january["conditional_gain_mean"] == 50
-    assert january["conditional_gain_percent"] == pytest.approx(0.05)
-    assert january["conditional_gain_median_percent"] == pytest.approx(0.2)
+    assert january["maker_fee_estimate_sats"] == january["maker_fee_exact_sats"] == 100
+    assert january["maker_fee_mean_sats"] == 50
+    assert january["maker_fee_mean_percent"] == pytest.approx(0.05)
+    assert january["maker_fee_median_sats"] == 40
+    assert january["maker_fee_median_percent"] == pytest.approx(0.04)
+    assert (january["maker_fee_identified"], january["maker_fee_unanalyzed"]) == (1, 1)
+    assert january["maker_fee_partial"] is True
     assert not any("ppm" in key for key in january)
-    assert january["solver_samples"] == 1
-    assert january["conditional_gain_total_sats"] == 100
-    assert january["solver_attempted"] == 1
     assert months[1]["coverage"] == "partial"
     assert months[3]["count"] is None
     assert months[3]["coverage"] == "unscanned"
+    # Legacy single-solution totals (candidate[5]) are not evidence.
+    assert monthly_stats(a, now)[0]["maker_fee_estimate_sats"] is None
 
 
-@pytest.mark.parametrize(
-    ("totals", "expected"),
-    [([], None), ([None], None), ([0], 0), ([100, 300, None], 400)],
-)
-def test_monthly_fee_total_preserves_unknown_zero_and_sample_sums(tmp_path, totals, expected):
-    initialize(tmp_path, 1)
-    archive = Archive(tmp_path)
-    archive.add(
-        [
-            1,
-            "01" * 32,
-            1579000000,
-            len(totals),
-            [
-                [f"{index + 1:064x}", 100_000, 3 + index, None, None, total]
-                for index, total in enumerate(totals)
-            ],
-        ]
-    )
-    archive.flush()
-    rows = monthly_stats(archive, datetime(2020, 2, 1, tzinfo=UTC))
-    assert rows[0]["conditional_gain_total_sats"] == expected
-    assert rows[0]["solver_samples"] == sum(total is not None for total in totals)
-    assert rows[1]["conditional_gain_total_sats"] is None
-    output = tmp_path / "site"
-    render(tmp_path, output, datetime(2020, 2, 1, tzinfo=UTC))
+def test_render_reads_analyses_and_ignores_legacy_fee_estimates(tmp_path):
     import csv
 
-    exported = list(csv.DictReader((output / "monthly.csv").read_text().splitlines()))
-    assert exported[0]["conditional_gain_total_sats"] == ("" if expected is None else str(expected))
-
-
-def test_monthly_totals_join_current_txids_with_new_witnesses_and_legacy_fallback(tmp_path):
-    from jmstats.fee_analysis import Analysis
-    from jmstats.solver import Amounts, Outcome, Witness
+    from jmstats.fee_analysis import FeeStore
 
     initialize(tmp_path, 1)
     archive = Archive(tmp_path)
+    txids = [f"{index + 1:064x}" for index in range(3)]
     archive.add(
-        [
-            1,
-            "01" * 32,
+        [1, "01" * 32, 1579000000, 3, [[txid, 100_000, 3, None, None, 5] for txid in txids]]
+    )
+    archive.flush()
+    store = FeeStore(tmp_path)
+    for txid in txids[:2]:
+        store.add_amounts(
+            txid,
             1579000000,
-            3,
-            [
-                ["ab" * 32, 1_000_000, 3, 20, 1000, 9999],
-                ["cd" * 32, 1_000_000, 3, 20, 1000, 70],
-                ["ef" * 32, 1_000_000, 3, 20, 1000, None],
-            ],
-        ]
-    )
-    record = Analysis(
-        txid="ab" * 32,
-        height=999,
-        timestamp=1736000000,
-        block_hash="99" * 32,
-        amounts=Amounts(
-            inputs=[600_000, 410_050, 1_099_990, 1_899_980],
-            outputs=[1_000_000] * 3 + [10_000, 100_000, 900_000],
-            denomination=1_000_000,
-            participants=3,
-            network_fee=20,
-        ),
-        status="solved",
-        outcome=Outcome(
-            status="solved",
-            witness=Witness(
-                input_groups=[[0, 1], [2], [3]],
-                change_indices=[0, 1, 2],
-            ),
-        ),
-    )
-    solutions = {record.txid: record, "aa" * 32: record.model_copy(update={"txid": "aa" * 32})}
-    row = monthly_stats(archive, datetime(2020, 1, 31, tzinfo=UTC), solutions=solutions)[0]
-    assert row["conditional_gain_total_sats"] == 100
-    assert row["conditional_gain_mean"] == 25
-    assert row["solver_samples"] == row["solver_attempted"] == 2
-    assert row["conditional_gain_median"] == 15
-    row = monthly_stats(
-        archive, datetime(2020, 1, 31, tzinfo=UTC), {"2020-01": {"median_sats": 123}}, solutions
-    )[0]
-    assert row["conditional_gain_median"] == 123
+            [101_100, 150_000, 1_100_000],
+            [100_000] * 3 + [1000, 50_000, 1_000_000],
+        )
+    store.add_analysis(txids[0], Result(status="identified", low=0, high=0, gains=[0, 0]))
+    store.add_analysis(txids[1], Result(status="inconsistent"))
+    store.flush()
+    write_json(tmp_path / "fee-estimates.json", {"months": {"2020-01": {"median_sats": 123}}})
+    output = tmp_path / "site"
+    render(tmp_path, output, datetime(2020, 2, 1, tzinfo=UTC))
+    data = json.loads((output / "data.json").read_text())
+    assert data["schema_version"] == 2
+    january, february = data["months"]
+    assert january["maker_fee_estimate_sats"] == 0  # A real zero, not unknown.
+    assert january["maker_fee_median_sats"] == 0
+    assert (january["inconsistent"], january["maker_fee_unanalyzed"]) == (1, 1)
+    assert february["maker_fee_estimate_sats"] is None
+    exported = list(csv.DictReader((output / "monthly.csv").read_text().splitlines()))
+    assert exported[0]["maker_fee_estimate_sats"] == "0"
+    assert exported[1]["maker_fee_estimate_sats"] == ""
 
 
 def test_render_without_chain_and_cli_update_error_keeps_market(tmp_path, monkeypatch):

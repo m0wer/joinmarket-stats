@@ -16,8 +16,6 @@ playwright==1.64.1
     # via joinmarket-stats (pyproject.toml)
 pluggy==1.7.0
     # via pytest
-pulp==3.3.2
-    # via joinmarket-stats (pyproject.toml)
 pydantic==2.14.2
     # via joinmarket-stats (pyproject.toml)
 pydantic-core==2.50.2

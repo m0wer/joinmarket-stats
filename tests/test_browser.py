@@ -67,6 +67,9 @@ def test_dashboard_local_only_responsive_and_interactive(dashboard, width):
         assert not page.locator("#error").is_visible()
         assert "CoinJoin" in page.title() or "JoinMarket" in page.title()
         assert all(url.startswith(dashboard) for url in requests)
+        repository = page.locator("footer").get_by_role("link", name="GitHub", exact=True)
+        assert repository.is_visible()
+        assert repository.get_attribute("href") == "https://github.com/m0wer/joinmarket-stats"
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         assert page.locator("form").count() == 0
         assert page.locator("#methodology").count() == 0

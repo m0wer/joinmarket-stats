@@ -6,5 +6,6 @@ COPY requirements.txt pyproject.toml LICENSE THIRD_PARTY_LICENSES ./
 RUN pip install -r requirements.txt
 COPY src ./src
 RUN pip install --no-deps .
+RUN mkdir -p /app/tmp && chmod 1777 /app/tmp
 ENTRYPOINT ["jmstats"]
 CMD ["update"]

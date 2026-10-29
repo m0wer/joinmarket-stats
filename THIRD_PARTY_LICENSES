@@ -1,4 +1,5 @@
 Raw block parser adapted from joinmarket_analyzer/tmp/rawblocks.py.
+Conditional CBC fee model based on joinmarket_analyzer solver constraints.
 Reference: https://github.com/m0wer/joinmarket_analyzer
 
 Copyright 2025 JoinMarket contributors

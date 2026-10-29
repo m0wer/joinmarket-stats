@@ -113,8 +113,53 @@ def test_dashboard_local_only_responsive_and_interactive(dashboard, width):
         assert "bond^1.3" in page.locator("#maker-bond-note").inner_text()
         assert "ppm" not in page.locator("body").inner_text()
         assert "%" in page.locator("#maker-cards .card").first.inner_text()
-        page.select_option("#year", "2020")
-        assert "0 of 12 months fully scanned" in page.locator("#coverage").inner_text()
-        assert page.locator("#activity-chart rect.bar").count() == 0
+        assert page.locator("#year option").evaluate_all("els => els.map(e => e.value)") == [
+            "all",
+            "2026",
+            "2025",
+            "2024",  # The synthetic archive has a scanned, zero-CJ December block.
+        ]
+        page.select_option("#year", "all")
+        assert page.locator("#monthly-table tr").count() == 23
+        assert "2020" not in page.locator("#activity-chart").text_content()
+        assert "2024-12: 0 transactions" in page.locator("#activity-chart").text_content()
         assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("has_observations", [True, False])
+def test_activity_history_keeps_zeroes_and_gaps_but_not_empty_leading_years(
+    dashboard, has_observations
+):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+
+        def activity_history(route):
+            payload = route.fetch().json()
+            for month in payload["months"]:
+                month.update(count=None, volume_sats=None, coverage="unscanned")
+                if has_observations and month["month"] in ("2025-03", "2025-05"):
+                    month.update(count=0, volume_sats=0, coverage="complete")
+            route.fulfill(json=payload)
+
+        page.route("**/data.json", activity_history)
+        page.goto(dashboard)
+        page.wait_for_selector("#maker-cards .value")
+        assert not page.locator("#error").is_visible()
+        years = page.locator("#year option").evaluate_all("els => els.map(e => e.value)")
+        page.select_option("#year", "all")
+        if has_observations:
+            assert years == ["all", "2025"]
+            assert page.locator("#monthly-table tr").count() == 20
+            first_month = page.locator("#monthly-table tr").last.locator("td").first
+            assert first_month.text_content() == "2025-03"
+            chart = page.locator("#activity-chart")
+            assert "2025-04: unscanned" in chart.text_content()
+            assert "2025-03: 0 transactions" in chart.text_content()
+            assert chart.locator("rect.bar").count() == 2
+        else:
+            assert years == ["all"]
+            assert page.locator("#monthly-table tr").count() == 0
+            assert "No scanned activity yet" in page.locator("#activity-chart").inner_text()
         browser.close()

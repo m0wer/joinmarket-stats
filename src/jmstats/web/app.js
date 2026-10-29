@@ -46,6 +46,7 @@ function cards(id, items, extra = "") {
     .join("");
 }
 function activityChart(months) {
+  if (!months.length) return '<p class="empty">No scanned activity yet.</p>';
   const w = Math.max(280, $("activity-chart").clientWidth),
     h = $("activity-chart").clientHeight,
     small = w < 600,
@@ -309,10 +310,17 @@ async function start() {
     dataset = await response.json();
     if (dataset.schema_version !== 1)
       throw new Error("Unsupported data version");
+    // Hide leading unscanned months, but retain later gaps and scanned zeroes.
+    const firstScanned = dataset.months.findIndex((m) => m.count !== null);
+    dataset.months = firstScanned < 0 ? [] : dataset.months.slice(firstScanned);
     $("updated").textContent =
       `Rendered ${new Date(dataset.generated_at).toLocaleString("en-US", { timeZone: "UTC" })} UTC`;
     const years = [
-      ...new Set(dataset.months.map((m) => m.month.slice(0, 4))),
+      ...new Set(
+        dataset.months
+          .filter((m) => m.count !== null)
+          .map((m) => m.month.slice(0, 4)),
+      ),
     ].reverse();
     for (const year of years) $("year").add(new Option(year, year));
     $("year").value = years[0] || "all";

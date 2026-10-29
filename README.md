@@ -37,7 +37,7 @@ jmstats --data /path/to/archive render --output /path/to/site
 
 ## History and explicit bootstrap
 
-The imported full-block corpus begins January 1, 2025, with incremental scanning extending it to the current confirmed tip. Coverage starts at 2020 in the dashboard, but missing and partial months remain labeled, never invented or displayed as zero. The prefilled hourly orderbook history starts May 22, 2026. Inspect the coverage line and `data/state.json` for the current corpus status.
+The imported full-block corpus begins January 1, 2025, with incremental scanning extending it to the current confirmed tip. The dashboard starts at the first scanned month (currently January 2025); years without observations are omitted from the selector. Gaps after that start and partial months remain labeled, never invented or displayed as zero. JSON and CSV exports retain unscanned months from 2020 for coverage tracking and explicit backfills. The prefilled hourly orderbook history starts May 22, 2026. Inspect the coverage line and `data/state.json` for the current corpus status.
 
 The initial corpus can be imported explicitly from the reference analyzer, without a runtime dependency on it:
 

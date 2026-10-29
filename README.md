@@ -1,6 +1,6 @@
 # JoinMarket Stats
 
-A static JoinMarket mainnet dashboard: monthly CoinJoin-shaped activity, historical orderbooks, and modeled maker returns. CJ sizes and fees use satoshis; relative fees use percent, as makers configure them. Transaction counts and BTC volume share one chart. Light and dark themes follow the system by default, with a saved manual override. No CDNs, analytics, remote fonts, frontend packages, or runtime backend. The generated dashboard is about 175 KB before compression.
+A static JoinMarket mainnet dashboard: monthly CoinJoin-shaped activity, historical orderbooks, and modeled maker returns. CJ sizes and fees use satoshis; relative fees use percent, as makers configure them. Transaction counts and BTC volume share one chart; monthly maker fee totals have a separate chart with visible solver coverage. Light and dark themes follow the system by default, with a saved manual override. No CDNs, analytics, remote fonts, frontend packages, or runtime backend. The generated dashboard is about 180 KB before compression.
 
 ## Run locally
 
@@ -48,6 +48,20 @@ jmstats import-fees ../joinmarket_analyzer/tmp/jm_2025_2026.sqlite3
 
 `import-fees` reduces the source's individual conditional maker gains to monthly absolute and relative medians. These are not medians of transaction-level averages. Missing fee estimates remain unavailable rather than triggering a solver or historical scan.
 
+Newly collected CoinJoin-shaped transactions are analyzed with a bounded CBC solver (five seconds by default, one thread, a 1 GiB address-space limit per child process, and a hard subprocess deadline five seconds longer). The solver supports multiple inputs per participant and taker change. Each attempt caches input/output amounts in `data/fee-solutions/` before solving, so later retries need no transaction download. Results are conditional feasible decompositions, not uniquely recovered fees. The price-prior-free fee-ceiling method for the maker workbench remains separate.
+
+Existing transactions are **not** automatically reanalyzed on upgrade. Start an explicit solver-only pass, optionally using the analyzer's read-only transaction cache:
+
+```sh
+jmstats analyze-fees --cache ../joinmarket_analyzer/tmp/jm_2025_2026.sqlite3 \
+  --cache-only --max-transactions 200 --solver-seconds 5
+jmstats analyze-fees --from-height 610670 --max-transactions 200
+```
+
+Repeat to continue with unattempted transactions. Imported successful estimates are retained without recomputation. Each invocation is bounded by transaction count, request budget, and wall time (`--max-seconds`, default 900). `--cache-only` never contacts the network; cache misses remain unknown. A durable `started` marker prevents an interrupted attempt from restarting implicitly. Use `--retry` explicitly to retry interrupted, timed-out, or errored attempts, optionally with a larger `--solver-seconds` budget. Infeasible and invalid outcomes are not retried. A throttle response reports a cooldown for the caller to honor without modifying the chain collector's state.
+
+The solver-only command has its own writer lock and can run alongside a chain collector. For new parallel collection processes use `jmstats sync --no-solver`; ordinary `sync` and `update` run the solver themselves and require both locks. Never run two solver writers or two chain writers against the same archive. Solver-only passes change neither chain shards nor scan state. Raw amounts have no addresses, scripts, or ownership identities.
+
 Historical orderbooks can be reduced on their source host without copying raw snapshots or installing this package there:
 
 ```sh
@@ -90,7 +104,7 @@ jmstats sync --backfill --from-height 610670 \
 
 Repeat to resume. Use faster pacing only with an instance you control. Full history requires hundreds of thousands of blocks and potentially hundreds of gigabytes of downloads, though only compact observations are retained. Do not run historical bootstrap against the public service unattended. Seed-following graph samples are intentionally not used for monthly totals: connectivity cannot prove completeness.
 
-An explicit lower backfill floor does not prevent CI from extending the existing complete 2025+ segment. Once the prefix joins, the collector verifies continuity and promotes the persisted automatic scan floor. Only one CLI writer may use an archive at a time.
+An explicit lower backfill floor does not prevent CI from extending the existing complete 2025+ segment. Once the prefix joins, the collector verifies continuity and promotes the persisted automatic scan floor. Only one chain writer may use an archive at a time; a solver-only writer may run independently.
 
 ## GitHub Pages and scheduled updates
 
@@ -98,7 +112,7 @@ An explicit lower backfill floor does not prevent CI from extending the existing
 2. Allow the workflow token to write repository contents. Branch rules must permit the bot's data commits.
 3. Run **Validate and publish dashboard** manually once, inspect the collection log and the deployed coverage panel, then leave its daily schedule enabled.
 
-The workflow tests, builds the same Docker image, collects, commits `data/`, and deploys `site/` daily at 03:23 UTC. Public CI explicitly uses `https://mempool.space/api`, as requested. No credentials or local DNS overrides are included. Data-only commits do not retrigger the workflow. All production runs share a concurrency group.
+The workflow tests, builds the same Docker image, collects and solves new candidates, commits `data/`, and deploys `site/` daily at 03:23 UTC. It does not start historical solver passes. Solver outcome counts appear in collection logs; solver execution errors fail the run after retained data is rendered. Public CI explicitly uses `https://mempool.space/api`, as requested. No credentials or local DNS overrides are included. Data-only commits do not retrigger the workflow. All production runs share a concurrency group.
 
 Requests are serial, paced two seconds apart, and limited to 600 attempts per run. This pacing is a conservative starting point, **not a documented safe public quota**. Raw blocks cost two requests each, plus transaction detail lookups only for above-floor candidates. Six confirmations are left uncollected. Public raw-block availability and quota must be checked on the first manual CI run.
 
@@ -118,7 +132,9 @@ candidate = [txid, denomination_sats, equal_outputs, miner_fee_sats_or_null,
 
 The archive retains the broad structural cohort (denomination at least one satoshi). Reports select denominations of at least 75,000 satoshis, at least three equal outputs, equal-output count equal to half the output count rounded up, and at least that many inputs. This mirrors the reference analyzer. It can include false positives and miss atypical JoinMarket transactions. A shape match does not authenticate the protocol. Block timestamps, not calendar height estimates, define UTC months. Fully scanned months require one contiguous segment bracketing both boundaries by two hours, conservatively accounting for nonmonotonic block timestamps.
 
-Equal-output volume is denomination times equal-output count, not unique capital. Equal outputs are only a participant proxy. Miner fees are separate from CoinJoin fees. Imported solver gains are non-unique, conditional net maker gains under a fee ceiling of `max(0.5% × denomination, 10,000 sat)`, not observed gross fees. Mean gain is weighted by maker slots; medians use individual maker samples in `data/fee-estimates.json`. The table includes transaction sample counts. New observations do not invent solver results. The imported corpus and parser originate from [joinmarket_analyzer](https://github.com/m0wer/joinmarket_analyzer), MIT licensed. BTC amounts have at most two decimal places and no decimals at 100 BTC or more.
+Equal-output volume is denomination times equal-output count, not unique capital. Equal outputs are only a participant proxy. Miner fees are separate from CoinJoin fees. Imported and new solver gains are non-unique, conditional net maker gains under a fee ceiling of `max(0.5% × denomination, 10,000 sat)` per maker and the assumption that makers do not lose sats, not observed gross fees. Every solver witness is independently checked against integer amounts and fee conservation. The maker fee chart sums only solved transactions and shows their fraction of all detected candidates; it does not extrapolate unresolved fees. Complete block coverage does not imply complete fee coverage. Missing estimates remain unavailable, while a solved zero gain is a real zero. The original analyzer corpus attempted every candidate with a two-second budget, but only successful solutions were imported; its coverage is not a random sample.
+
+Mean gain is weighted by solved maker slots. Imported individual-maker medians in `data/fee-estimates.json` are retained; months without imported medians use individual gains from new solver witnesses. The table includes solved transaction counts and fee totals; JSON and CSV also include known attempt counts (older unsuccessful attempts were not imported). Solver evidence is joined by transaction ID to the current chain, so orphaned transactions do not contribute and re-mining the same transaction preserves its evidence. The imported corpus, parser, and solver constraints originate from [joinmarket_analyzer](https://github.com/m0wer/joinmarket_analyzer), MIT licensed. BTC amounts have at most two decimal places and no decimals at 100 BTC or more.
 
 The watcher snapshot publishes anonymized current offers and aggregate hourly history, not nickname, address, or bond-outpoint histories. Reported locked principal is counted once per unexpired outpoint with consistent amounts. Verified principal is recorded separately using the watcher's flags, not independently checked by this collector. The chart uses reported values so early snapshots with unavailable verification remain comparable. Bonded-maker history counts positive advertised weight; raw maker and offer totals deliberately include spam. Advertised offer sizes do not prove available funds.
 
@@ -136,7 +152,7 @@ Because weight grows as bond^1.3, per-BTC selection probability rises with bond 
 
 Monthly shards are replaced atomically, flushed before another shard becomes dirty and at least every 20 blocks. Heights are checked across all shards because timestamps can go backward. Crashes can redownload at most 20 uncheckpointed blocks. OS-level writer locks release automatically on process exit; do not delete locks to bypass an active collector.
 
-Absent state requires explicit initialization or import. Empty or gapped automatic ranges refuse to scan without explicit backfill. Unknown state versions or detector IDs fail closed, without migrations, deletion, or automatic rescans. There is no earlier release to migrate; future unsupported upgrades must use an explicit migration rather than reinterpret unknown metadata.
+Absent chain state requires explicit initialization or import. Empty or gapped automatic ranges refuse to scan without explicit backfill. Unknown state versions or detector IDs fail closed, without migrations, deletion, or automatic rescans. Upgrading from the previous release leaves chain state, imported fees, and the existing single-input fee-inference format unchanged. An absent solver sidecar proves nothing and does not trigger historical work: only newly collected candidates are solved automatically. Explicit `analyze-fees` selects historical work. Unknown solver formats, or solver shards without their metadata, fail closed rather than initiating recomputation. Amounts and interrupted attempts are durably recorded before solving; successful and infeasible outcomes are not silently replaced.
 
 Before extending the chain, the collector checks mainnet genesis and every segment's final hash, verifies fetched raw header hashes and adjacent ancestry, and checks joins. A reorganization stops collection; it does not silently delete history. After identifying the last good height, back up the archive, then explicitly repair it:
 

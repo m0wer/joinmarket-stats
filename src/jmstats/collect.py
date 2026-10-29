@@ -15,10 +15,12 @@ from pydantic import BaseModel, Field, field_validator
 from .archive import DETECTOR, Archive, State, write_json
 from .blocks import scan_block
 from .bond_history import merge_bond_history
+from .fee_analysis import Analysis, SolutionHistory
 from .http import Deferred, JsonClient
 from .inference import FeeHistory, infer_fee_record
 from .market import normalize_market
 from .snapshots import reduce_bond_snapshot, reduce_snapshot
+from .solver import DEFAULT_SECONDS
 
 MAINNET_GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
 
@@ -75,13 +77,24 @@ def initialize(root: Path, start: int) -> None:
 
 
 def collect_chain(
-    archive: Archive, client: JsonClient, *, backfill=False, max_blocks=200, from_height=None
+    archive: Archive,
+    client: JsonClient,
+    *,
+    backfill=False,
+    max_blocks=200,
+    from_height=None,
+    solve_fees=True,
+    solver_seconds=DEFAULT_SECONDS,
 ) -> dict:
+    if not 0 < solver_seconds < float("inf"):
+        raise ValueError("Solver seconds must be positive and finite")
     completed = 0
     if archive.state.cooldown_until > time.time():
         return {"status": "cooldown", "until": archive.state.cooldown_until, "blocks": 0}
     height = archive.next_height(backfill, from_height)
     fee_history = FeeHistory(archive.root)
+    solutions = SolutionHistory(archive.root) if solve_fees else None
+    solver_outcomes = Counter()
     try:
         if client.text("/block-height/0") != MAINNET_GENESIS:
             raise ValueError("The configured API is not Bitcoin mainnet")
@@ -117,6 +130,20 @@ def collect_chain(
                 if type(fee) is not int or fee < 0:
                     raise ValueError("Invalid transaction fee")
                 candidate[3] = fee
+                if solutions is not None:
+                    analysis = solutions.run(
+                        Analysis.capture(
+                            tx,
+                            txid=candidate[0],
+                            height=height,
+                            block_hash=block_hash,
+                            timestamp=block["timestamp"],
+                            denomination=candidate[1],
+                            participants=candidate[2],
+                            seconds=solver_seconds,
+                        )
+                    )
+                    solver_outcomes[analysis.status] += 1
                 if candidate[0] not in fee_history.records:
                     fee_history.add(
                         infer_fee_record(
@@ -137,7 +164,12 @@ def collect_chain(
     except Deferred as exc:
         if exc.cooldown:
             archive.state.cooldown_until = time.time() + exc.cooldown
-        return {"status": "deferred", "reason": str(exc), "blocks": completed}
+        return {
+            "status": "deferred",
+            "reason": str(exc),
+            "blocks": completed,
+            "solver_outcomes": dict(solver_outcomes),
+        }
     finally:
         fee_history.flush()
         archive.flush()
@@ -145,7 +177,127 @@ def collect_chain(
             if all(h in archive.blocks for h in range(from_height, archive.state.scan_start)):
                 archive.state.scan_start = from_height
         archive.save_state()
-    return {"status": "ok", "blocks": completed, "next_height": height, "confirmed_tip": tip}
+    return {
+        "status": "ok",
+        "blocks": completed,
+        "next_height": height,
+        "confirmed_tip": tip,
+        "solver_outcomes": dict(solver_outcomes),
+    }
+
+
+def analyze_fees(
+    root: Path,
+    client: JsonClient,
+    *,
+    cache: Path | None = None,
+    cache_only: bool = False,
+    from_height: int = 0,
+    to_height: int | None = None,
+    max_transactions: int = 200,
+    max_seconds: float = 900,
+    solver_seconds: float = DEFAULT_SECONDS,
+    retry: bool = False,
+) -> dict:
+    """Explicit solver-only pass. Never write chain state or acquire its writer lock."""
+    if (
+        from_height < 0
+        or (to_height is not None and to_height < from_height)
+        or max_transactions < 1
+        or not 0 < max_seconds < float("inf")
+        or not 0 < solver_seconds < float("inf")
+        or (cache_only and cache is None)
+    ):
+        raise ValueError("Invalid solver analysis scope")
+    archive = Archive(root)
+    # Each shard was read atomically. The concurrent collector can extend this
+    # snapshot, but this function has no mutable chain reference after this point.
+    blocks = sorted(archive.blocks.values(), key=lambda block: block[0])
+    del archive
+    history = SolutionHistory(root)
+    database = sqlite3.connect(cache.resolve().as_uri() + "?mode=ro", uri=True) if cache else None
+    counts = Counter()
+    attempted, missing, imported = 0, 0, 0
+    started = time.monotonic()
+    network_checked = False
+    result = {"status": "ok"}
+    try:
+        for height, block_hash, timestamp, _, candidates in blocks:
+            if height < from_height or (to_height is not None and height > to_height):
+                continue
+            for txid, denomination, participants, _, _, legacy_gain in candidates:
+                if denomination < 75_000:
+                    continue
+                previous = history.records.get(txid)
+                if previous:
+                    if not (retry and previous.status in ("started", "timeout", "error")):
+                        continue
+                    record = previous.model_copy(update={"seconds": solver_seconds})
+                elif legacy_gain is not None:
+                    imported += 1
+                    continue
+                else:
+                    record = None
+                if attempted >= max_transactions or time.monotonic() - started >= max_seconds:
+                    result["status"] = "bounded"
+                    return {
+                        **result,
+                        "attempted": attempted,
+                        "outcomes": dict(counts),
+                        "cache_misses": missing,
+                        "retained_imported": imported,
+                    }
+                if record is None:
+                    cached = (
+                        database.execute(
+                            "SELECT json_extract(payload,'$.raw_tx') FROM analyses WHERE txid=?",
+                            (txid,),
+                        ).fetchone()
+                        if database
+                        else None
+                    )
+                    if cached and cached[0]:
+                        raw = json.loads(cached[0])
+                    elif cache_only:
+                        missing += 1
+                        continue
+                    else:
+                        if not network_checked:
+                            if client.text("/block-height/0") != MAINNET_GENESIS:
+                                raise ValueError("The configured API is not Bitcoin mainnet")
+                            network_checked = True
+                        raw = client.get(f"/tx/{txid}")
+                    if raw.get("status", {}).get("block_hash") != block_hash:
+                        raise ValueError("Solver transaction is not in the expected block")
+                    record = Analysis.capture(
+                        raw,
+                        txid=txid,
+                        height=height,
+                        block_hash=block_hash,
+                        timestamp=timestamp,
+                        denomination=denomination,
+                        participants=participants,
+                        seconds=solver_seconds,
+                    )
+                outcome = history.run(record, retry=retry)
+                attempted += 1
+                counts[outcome.status] += 1
+                if attempted % 25 == 0:
+                    print(f"Analyzed {attempted} transactions: {dict(counts)}", flush=True)
+    except Deferred as exc:
+        # The chain writer owns state.json. Updating its cooldown here would
+        # overwrite concurrent progress. The caller must honor this defer signal.
+        result.update(status="deferred", reason=str(exc), cooldown=exc.cooldown)
+    finally:
+        if database:
+            database.close()
+    return {
+        **result,
+        "attempted": attempted,
+        "outcomes": dict(counts),
+        "cache_misses": missing,
+        "retained_imported": imported,
+    }
 
 
 def infer_historical_fees(

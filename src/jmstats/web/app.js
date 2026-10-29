@@ -83,6 +83,53 @@ function activityChart(months) {
   });
   return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly transaction bars and equal-output volume line, with separate left and right axes"><text x="${left}" y="10">Transactions</text><text x="${w - right}" y="10" text-anchor="end">BTC</text>${svg}<path class="volume-line" d="${line}"/></svg>`;
 }
+function makerFeesChart(months) {
+  if (!months.length) return '<p class="empty">No scanned activity yet.</p>';
+  if (
+    !months.some(
+      (m) => m.count != null && m.conditional_gain_total_sats != null,
+    )
+  )
+    return '<p class="empty">No maker fee estimates for this period.</p>';
+  const w = Math.max(280, $("maker-fees-chart").clientWidth),
+    h = $("maker-fees-chart").clientHeight,
+    small = w < 600,
+    max = Math.max(1, ...months.map((m) => m.conditional_gain_total_sats || 0)),
+    left = Math.max(55, fmt(max).length * 6 + 12),
+    right = 45,
+    top = 20,
+    bottom = 30,
+    pw = w - left - right,
+    ph = h - top - bottom,
+    step = pw / months.length;
+  let svg = "",
+    line = "",
+    connected = false;
+  for (let i = 0; i <= 4; i++) {
+    const y = top + (ph * i) / 4;
+    svg += `<line class="axis" x1="${left}" x2="${w - right}" y1="${y}" y2="${y}"/><text x="${left - 10}" y="${y + 4}" text-anchor="end">${fmt(max * (1 - i / 4))}</text><text x="${w - right + 10}" y="${y + 4}">${100 - 25 * i}%</text>`;
+  }
+  months.forEach((m, i) => {
+    const x = left + step * (i + 0.5),
+      sample = `${fmt(m.solver_samples)} of ${fmt(m.count)} transactions solved`,
+      total = m.conditional_gain_total_sats;
+    if (m.count == null || total == null) {
+      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "fee estimates unavailable; " + sample}</title></text>`;
+    } else {
+      const bh = Math.max(1, (total / max) * ph);
+      svg += `<rect class="bar ${m.coverage === "complete" ? "" : "partial"}" x="${x - step * 0.35}" y="${top + ph - bh}" width="${Math.max(1, step * 0.7)}" height="${bh}" rx="1"><title>${m.month}: ${fmt(total)} sats conditional net maker gains; ${sample}; ${m.coverage} block coverage</title></rect>`;
+    }
+    if (m.count > 0) {
+      const y = top + ph * (1 - m.solver_samples / m.count);
+      line += `${connected ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)} `;
+      connected = true;
+      svg += `<circle class="fee-coverage-point" cx="${x}" cy="${y}" r="2"><title>${m.month}: ${sample}</title></circle>`;
+    } else connected = false;
+    if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
+      svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
+  });
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly conditional net maker gain totals in sats, with the percentage of transactions solved on the right axis"><text x="${left}" y="10">sats</text><text x="${w - right}" y="10" text-anchor="end">Solved</text>${svg}<path class="fee-coverage-line" d="${line}"/></svg>`;
+}
 function activity() {
   const months = dataset.months.filter(
     (m) => $("year").value === "all" || m.month.startsWith($("year").value),
@@ -134,11 +181,12 @@ function activity() {
     ],
   ]);
   $("activity-chart").innerHTML = activityChart(months);
+  $("maker-fees-chart").innerHTML = makerFeesChart(months);
   $("monthly-table").innerHTML = [...months]
     .reverse()
     .map(
       (m) =>
-        `<tr><td>${m.month}</td><td>${m.coverage}</td><td>${fmt(m.count)}</td><td>${btc(m.volume_sats)}</td><td>${fmt(m.median_size_sats)}</td><td>${amount(m.median_participants)}</td><td>${fmt(m.conditional_gain_median)}</td><td>${rate(m.conditional_gain_median_percent)}</td><td>${fmt(m.conditional_gain_mean)}</td><td>${rate(m.conditional_gain_percent)}</td><td>${fmt(m.solver_samples)} / ${fmt(m.count)}</td></tr>`,
+        `<tr><td>${m.month}</td><td>${m.coverage}</td><td>${fmt(m.count)}</td><td>${btc(m.volume_sats)}</td><td>${fmt(m.median_size_sats)}</td><td>${amount(m.median_participants)}</td><td>${fmt(m.conditional_gain_total_sats)}</td><td>${fmt(m.conditional_gain_median)}</td><td>${rate(m.conditional_gain_median_percent)}</td><td>${fmt(m.conditional_gain_mean)}</td><td>${rate(m.conditional_gain_percent)}</td><td>${fmt(m.solver_samples)} / ${fmt(m.count)}</td></tr>`,
     )
     .join("");
 }

@@ -62,7 +62,7 @@ jobs:
           mkdir -p site
           docker run --rm --user "$(id -u):$(id -g)" \
             -v "$PWD/data:/app/data" -v "$PWD/site:/app/site" \
-            joinmarket-stats update --api https://mempool.space/api \
+            joinmarket-stats update --solver-seconds 5 --api https://mempool.space/api \
             --interval 2 --request-budget 600 --max-blocks 200
       - name: Commit completed observations
         run: |

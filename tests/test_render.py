@@ -43,9 +43,95 @@ def test_utc_coverage_gaps_and_conditional_sample(tmp_path):
     assert january["conditional_gain_median_percent"] == pytest.approx(0.2)
     assert not any("ppm" in key for key in january)
     assert january["solver_samples"] == 1
+    assert january["conditional_gain_total_sats"] == 100
+    assert january["solver_attempted"] == 1
     assert months[1]["coverage"] == "partial"
     assert months[3]["count"] is None
     assert months[3]["coverage"] == "unscanned"
+
+
+@pytest.mark.parametrize(
+    ("totals", "expected"),
+    [([], None), ([None], None), ([0], 0), ([100, 300, None], 400)],
+)
+def test_monthly_fee_total_preserves_unknown_zero_and_sample_sums(tmp_path, totals, expected):
+    initialize(tmp_path, 1)
+    archive = Archive(tmp_path)
+    archive.add(
+        [
+            1,
+            "01" * 32,
+            1579000000,
+            len(totals),
+            [
+                [f"{index + 1:064x}", 100_000, 3 + index, None, None, total]
+                for index, total in enumerate(totals)
+            ],
+        ]
+    )
+    archive.flush()
+    rows = monthly_stats(archive, datetime(2020, 2, 1, tzinfo=UTC))
+    assert rows[0]["conditional_gain_total_sats"] == expected
+    assert rows[0]["solver_samples"] == sum(total is not None for total in totals)
+    assert rows[1]["conditional_gain_total_sats"] is None
+    output = tmp_path / "site"
+    render(tmp_path, output, datetime(2020, 2, 1, tzinfo=UTC))
+    import csv
+
+    exported = list(csv.DictReader((output / "monthly.csv").read_text().splitlines()))
+    assert exported[0]["conditional_gain_total_sats"] == ("" if expected is None else str(expected))
+
+
+def test_monthly_totals_join_current_txids_with_new_witnesses_and_legacy_fallback(tmp_path):
+    from jmstats.fee_analysis import Analysis
+    from jmstats.solver import Amounts, Outcome, Witness
+
+    initialize(tmp_path, 1)
+    archive = Archive(tmp_path)
+    archive.add(
+        [
+            1,
+            "01" * 32,
+            1579000000,
+            3,
+            [
+                ["ab" * 32, 1_000_000, 3, 20, 1000, 9999],
+                ["cd" * 32, 1_000_000, 3, 20, 1000, 70],
+                ["ef" * 32, 1_000_000, 3, 20, 1000, None],
+            ],
+        ]
+    )
+    record = Analysis(
+        txid="ab" * 32,
+        height=999,
+        timestamp=1736000000,
+        block_hash="99" * 32,
+        amounts=Amounts(
+            inputs=[600_000, 410_050, 1_099_990, 1_899_980],
+            outputs=[1_000_000] * 3 + [10_000, 100_000, 900_000],
+            denomination=1_000_000,
+            participants=3,
+            network_fee=20,
+        ),
+        status="solved",
+        outcome=Outcome(
+            status="solved",
+            witness=Witness(
+                input_groups=[[0, 1], [2], [3]],
+                change_indices=[0, 1, 2],
+            ),
+        ),
+    )
+    solutions = {record.txid: record, "aa" * 32: record.model_copy(update={"txid": "aa" * 32})}
+    row = monthly_stats(archive, datetime(2020, 1, 31, tzinfo=UTC), solutions=solutions)[0]
+    assert row["conditional_gain_total_sats"] == 100
+    assert row["conditional_gain_mean"] == 25
+    assert row["solver_samples"] == row["solver_attempted"] == 2
+    assert row["conditional_gain_median"] == 15
+    row = monthly_stats(
+        archive, datetime(2020, 1, 31, tzinfo=UTC), {"2020-01": {"median_sats": 123}}, solutions
+    )[0]
+    assert row["conditional_gain_median"] == 123
 
 
 def test_render_without_chain_and_cli_update_error_keeps_market(tmp_path, monkeypatch):

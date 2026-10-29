@@ -13,6 +13,7 @@ from statistics import mean, median
 
 from .archive import Archive, atomic_write, month_of, write_json
 from .bond_history import load_bond_history
+from .fee_analysis import Analysis, SolutionHistory
 from .inference import FeeHistory
 from .maker import optimize_maker
 
@@ -43,7 +44,10 @@ def _ppm_to_percent(value: float | None) -> float | None:
 
 
 def monthly_stats(
-    archive: Archive | None, now: datetime, fee_estimates: dict | None = None
+    archive: Archive | None,
+    now: datetime,
+    fee_estimates: dict | None = None,
+    solutions: dict[str, Analysis] | None = None,
 ) -> list[dict]:
     blocks = sorted(archive.blocks.values(), key=lambda b: b[0]) if archive else []
     segments = []
@@ -68,8 +72,31 @@ def monthly_stats(
         )
         fees = [c[3] for c in candidates if c[3] is not None]
         rates = [c[3] / ((c[4] + 3) // 4) for c in candidates if c[3] is not None and c[4]]
-        solved = [c for c in candidates if c[5] is not None]
-        maker_slots = sum(c[2] - 1 for c in solved)
+        solved, gains, relative_gains = [], [], []
+        attempted = 0
+        for candidate in candidates:
+            record = (solutions or {}).get(candidate[0])
+            samples = record.maker_gains if record else None
+            total = sum(samples) if samples is not None else candidate[5]
+            if (
+                record
+                and record.amounts
+                and (
+                    record.amounts.denomination != candidate[1]
+                    or record.amounts.participants != candidate[2]
+                )
+            ):
+                raise ValueError("Solver evidence does not match the archived candidate")
+            attempted += bool(candidate[5] is not None or record)
+            if total is not None:
+                solved.append((candidate, total))
+            if samples is not None:
+                gains.extend(samples)
+                relative_gains.extend(100 * gain / candidate[1] for gain in samples)
+        maker_slots = sum(c[2] - 1 for c, _ in solved)
+        imported = (fee_estimates or {}).get(key, {})
+        median_gain = imported.get("median_sats")
+        median_rate = _ppm_to_percent(imported.get("median_ppm"))
         result.append(
             {
                 "month": key,
@@ -84,18 +111,31 @@ def monthly_stats(
                 "network_fee_mean": mean(fees) if fees else None,
                 "network_fee_samples": len(fees),
                 "miner_sat_vb_median": median(rates) if rates else None,
-                "conditional_gain_mean": sum(c[5] for c in solved) / maker_slots
+                "conditional_gain_total_sats": sum(total for _, total in solved)
+                if solved
+                else None,
+                "conditional_gain_mean": sum(total for _, total in solved) / maker_slots
                 if maker_slots
                 else None,
-                "conditional_gain_percent": 100 * sum(c[5] / c[1] for c in solved) / maker_slots
+                "conditional_gain_percent": 100
+                * sum(total / c[1] for c, total in solved)
+                / maker_slots
                 if maker_slots
                 else None,
                 "solver_samples": len(solved),
-                "conditional_gain_median": (fee_estimates or {}).get(key, {}).get("median_sats"),
-                # The persisted estimate format stores ppm; the site uses percent.
-                "conditional_gain_median_percent": _ppm_to_percent(
-                    (fee_estimates or {}).get(key, {}).get("median_ppm")
-                ),
+                "solver_attempted": attempted,
+                # Imported medians summarize individual makers, not tx means.
+                # Retain them; months without an import use new solver samples.
+                "conditional_gain_median": median_gain
+                if median_gain is not None
+                else median(gains)
+                if gains
+                else None,
+                "conditional_gain_median_percent": median_rate
+                if median_rate is not None
+                else median(relative_gains)
+                if relative_gains
+                else None,
             }
         )
         year, month = (year + 1, 1) if month == 12 else (year, month + 1)
@@ -107,7 +147,7 @@ def render(root: Path, output: Path, now: datetime | None = None) -> dict:
     archive = Archive(root) if (root / "state.json").exists() else None
     fee_path = root / "fee-estimates.json"
     fee_estimates = json.loads(fee_path.read_text())["months"] if fee_path.exists() else {}
-    months = monthly_stats(archive, now, fee_estimates)
+    months = monthly_stats(archive, now, fee_estimates, SolutionHistory(root).records)
     market_path, history_path = root / "market.json", root / "market-history.json"
     market = json.loads(market_path.read_text()) if market_path.exists() else None
     data = {

@@ -8,5 +8,5 @@ dist/
 site/
 tmp/
 data/*.sqlite*
-data/.writer.lock
+data/**/.writer.lock
 data/**/*.tmp

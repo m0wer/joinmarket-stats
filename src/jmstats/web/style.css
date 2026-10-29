@@ -248,10 +248,14 @@ section {
   stroke: var(--green);
   stroke-width: 1;
 }
-.volume-line {
+.volume-line,
+.fee-coverage-line {
   fill: none;
   stroke: var(--blue);
   stroke-width: 2.3;
+}
+.fee-coverage-point {
+  fill: var(--blue);
 }
 .maker-line {
   fill: none;

@@ -5,6 +5,7 @@ from conftest import raw_block
 
 from jmstats.archive import Archive
 from jmstats.collect import MAINNET_GENESIS, collect_chain, infer_historical_fees, initialize
+from jmstats.fee_analysis import SolutionHistory
 from jmstats.http import Deferred
 from jmstats.inference import FeeHistory
 
@@ -111,11 +112,20 @@ def test_new_candidates_get_prior_free_fee_evidence(tmp_path):
         "vin": [{"prevout": {"value": value}} for value in (101130, 100991, 100982)],
         "vout": [{"value": value} for value in (100000, 100000, 100000, 1000, 1001, 1002)],
     }
-    collect_chain(Archive(tmp_path), api, backfill=True)
+    result = collect_chain(Archive(tmp_path), api, backfill=True)
     record = FeeHistory(tmp_path).records[api.txid]
     assert record.status == "inferred"
     assert record.ceiling_sats == 18
     assert record.ceiling_sats == max(record.maker_gains)
+    assert result["solver_outcomes"] == {"solved": 1}
+    assert SolutionHistory(tmp_path).records[api.txid].status == "solved"
+
+
+def test_collection_can_leave_solver_to_independent_process(tmp_path):
+    initialize(tmp_path, 1)
+    result = collect_chain(Archive(tmp_path), FakeAPI(), backfill=True, solve_fees=False)
+    assert result["solver_outcomes"] == {}
+    assert not (tmp_path / "fee-solutions").exists()
 
 
 def test_explicit_cached_inference_does_not_use_legacy_solver_prices(tmp_path):

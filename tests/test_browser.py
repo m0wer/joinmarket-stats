@@ -209,6 +209,9 @@ def test_fee_chart_sats_zeroes_gaps_coverage_and_year_filter(dashboard, width):
         assert "2025-03: no maker fee estimate" in text
         assert "2025-04: unscanned" in text
         assert "Solved" not in text and "%" not in text
+        activity = page.locator("#activity-chart").text_content()
+        assert "2025-01: 3 transactions, 0 BTC, complete; 1 inconsistent with" in activity
+        assert "5 inconsistent excluded" in page.locator("#activity-cards").inner_text()
         # The estimate bar sits on top of its exact part, within the axis.
         exact = chart.locator(".fee-exact").first.bounding_box()
         imputed = chart.locator(".fee-imputed").first.bounding_box()

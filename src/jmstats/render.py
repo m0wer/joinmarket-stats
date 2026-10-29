@@ -65,14 +65,18 @@ def monthly_stats(
         key: [c for b in groups.get(key, []) for c in b[4] if c[1] >= 75_000]
         for key in (f"{y:04}-{m:02}" for y, m in keys)
     }
-    maker_fees = monthly_maker_fees(candidates_by_month, analyses or {})
+    analyses = analyses or {}
+    maker_fees = monthly_maker_fees(candidates_by_month, analyses)
+    # Only a proven contradiction of the JoinMarket model excludes a candidate;
+    # unanalyzed candidates still count.
+    excluded = {txid for txid, result in analyses.items() if result.status == "inconsistent"}
     result = []
     for year, month in keys:
         key = f"{year:04}-{month:02}"
         first = datetime(year, month, 1, tzinfo=UTC)
         following = datetime(year + (month == 12), 1 if month == 12 else month + 1, 1, tzinfo=UTC)
         records = groups.get(key, [])
-        candidates = candidates_by_month[key]
+        candidates = [c for c in candidates_by_month[key] if c[0] not in excluded]
         full = any(
             a <= first.timestamp() - 7200 and z >= following.timestamp() + 7200 for a, z in spans
         )

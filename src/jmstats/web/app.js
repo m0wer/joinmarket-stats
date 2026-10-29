@@ -74,7 +74,7 @@ function activityChart(months) {
     } else {
       const bh = Math.max(1, (m.count / maxCount) * ph),
         y = top + ph - (m.volume_sats / SATS / maxVolume) * ph;
-      svg += `<rect class="bar ${m.coverage === "complete" ? "" : "partial"}" x="${x - step * 0.35}" y="${top + ph - bh}" width="${Math.max(1, step * 0.7)}" height="${bh}" rx="1"><title>${m.month}: ${fmt(m.count)} transactions, ${btc(m.volume_sats)} BTC, ${m.coverage}</title></rect>`;
+      svg += `<rect class="bar ${m.coverage === "complete" ? "" : "partial"}" x="${x - step * 0.35}" y="${top + ph - bh}" width="${Math.max(1, step * 0.7)}" height="${bh}" rx="1"><title>${m.month}: ${fmt(m.count)} transactions, ${btc(m.volume_sats)} BTC, ${m.coverage}${m.inconsistent ? `; ${fmt(m.inconsistent)} inconsistent with JoinMarket excluded` : ""}${m.maker_fee_unanalyzed ? `; ${fmt(m.maker_fee_unanalyzed)} not yet analyzed` : ""}</title></rect>`;
       line += `${connected ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)} `;
       connected = true;
     }
@@ -159,7 +159,7 @@ function activity() {
       "Observed transactions",
       fmt(seen.reduce((s, m) => s + m.count, 0)),
       "",
-      "Selected scanned blocks",
+      `${fmt(seen.reduce((s, m) => s + (m.inconsistent || 0), 0))} inconsistent excluded`,
     ],
     [
       "Equal-output volume",

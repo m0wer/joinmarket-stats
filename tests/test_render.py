@@ -58,6 +58,49 @@ def test_utc_coverage_gaps_and_maker_fee_fields(tmp_path):
     assert monthly_stats(a, now)[0]["maker_fee_estimate_sats"] is None
 
 
+def test_activity_excludes_only_proven_inconsistent_candidates(tmp_path):
+    initialize(tmp_path, 1)
+    a = Archive(tmp_path)
+    good, bad, unknown = "aa" * 32, "bb" * 32, "cc" * 32
+    a.add([1, "01" * 32, 1577829000, 1, []])
+    a.add(
+        [
+            2,
+            "02" * 32,
+            1579000000,
+            3,
+            [
+                [good, 100_000, 3, 300, 1000, None],
+                [bad, 5_000_000, 9, 9000, 4000, None],
+                [unknown, 200_000, 5, 500, 2000, None],
+            ],
+        ]
+    )
+    a.add([3, "03" * 32, 1580529600, 1, []])
+    a.flush()
+    now = datetime(2020, 2, 1, tzinfo=UTC)
+    analyses = {
+        good: Result(status="identified", low=10, high=10, gains=[4, 6]),
+        bad: Result(status="inconsistent"),
+    }
+    january = monthly_stats(a, now, analyses)[0]
+    assert (january["count"], january["inconsistent"]) == (2, 1)
+    assert january["volume_sats"] == 300_000 + 1_000_000
+    assert january["median_size_sats"] == 150_000
+    assert january["median_participants"] == 4
+    assert january["network_fee_mean"] == 400
+    assert january["network_fee_samples"] == 2
+    assert january["miner_sat_vb_median"] == pytest.approx((300 / 250 + 500 / 500) / 2)
+    # Without analyses nothing is excluded: absent evidence is not a contradiction.
+    unfiltered = monthly_stats(a, now)[0]
+    assert (unfiltered["count"], unfiltered["inconsistent"]) == (3, 0)
+    assert unfiltered["volume_sats"] == 1_300_000 + 45_000_000
+    # A scanned month whose candidates are all inconsistent has zero activity, not unknown.
+    none = monthly_stats(a, now, dict.fromkeys((good, bad, unknown), analyses[bad]))[0]
+    assert (none["count"], none["volume_sats"], none["inconsistent"]) == (0, 0, 3)
+    assert none["median_size_sats"] is none["network_fee_mean"] is None
+
+
 def test_render_reads_analyses_and_ignores_legacy_fee_estimates(tmp_path):
     import csv
 

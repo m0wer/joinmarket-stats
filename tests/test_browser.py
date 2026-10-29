@@ -1,0 +1,120 @@
+import functools
+import http.server
+import threading
+from datetime import UTC, datetime
+
+import pytest
+from conftest import model_history
+from playwright.sync_api import sync_playwright
+
+from jmstats.archive import write_json
+from jmstats.market import normalize_market
+from jmstats.render import render
+
+
+@pytest.fixture
+def dashboard(tmp_path, watcher_payload):
+    root, site = tmp_path / "data", tmp_path / "site"
+    model_history(root)
+    write_json(
+        root / "market.json",
+        normalize_market(watcher_payload, datetime(2026, 10, 29, 10, tzinfo=UTC)),
+    )
+    write_json(
+        root / "fee-estimates.json",
+        {"months": {"2025-01": {"median_sats": 200, "median_ppm": 2000}}},
+    )
+    write_json(
+        root / "market-history.json",
+        [
+            {
+                "as_of": "2026-10-29T09:00:00+00:00",
+                "makers": 5000,
+                "advertised_bonded_makers": 80,
+                "reported_locked_sats": 30000000000,
+                "offer_count": 5100,
+            }
+        ],
+    )
+    render(root, site, datetime(2026, 10, 29, 10, tzinfo=UTC))
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), functools.partial(Handler, directory=str(site))
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+    server.server_close()
+    thread.join()
+
+
+@pytest.mark.parametrize("width", [1440, 375])
+def test_dashboard_local_only_responsive_and_interactive(dashboard, width):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": 1000})
+        page.emulate_media(color_scheme="dark")
+        errors, requests = [], []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on("request", lambda request: requests.append(request.url))
+        page.goto(dashboard)
+        page.wait_for_selector("#maker-cards .value")
+        assert not page.locator("#error").is_visible()
+        assert "CoinJoin" in page.title() or "JoinMarket" in page.title()
+        assert all(url.startswith(dashboard) for url in requests)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        assert page.locator("form").count() == 0
+        assert page.locator("#methodology").count() == 0
+        assert "Privacy has a market" not in page.locator("body").inner_text()
+        assert "unknown, conflicting" not in page.locator("body").inner_text()
+        assert (
+            page.evaluate("getComputedStyle(document.documentElement).backgroundColor")
+            == "rgb(20, 26, 24)"
+        )
+        page.select_option("#theme", "light")
+        assert (
+            page.evaluate("getComputedStyle(document.documentElement).backgroundColor")
+            == "rgb(246, 247, 244)"
+        )
+        page.reload()
+        page.wait_for_selector("#maker-cards .value")
+        assert page.locator("#theme").input_value() == "light"
+        page.select_option("#theme", "system")
+        assert (
+            page.evaluate("getComputedStyle(document.documentElement).backgroundColor")
+            == "rgb(20, 26, 24)"
+        )
+        page.select_option("#year", "2025")
+        assert page.locator("#activity-chart .volume-line").count() == 1
+        assert page.locator("#activity-chart .bar").count() > 0
+        assert page.locator("#activity-chart text").first.evaluate("e => e.getScreenCTM().a") > 0.8
+        assert page.locator("#market-chart text").first.evaluate("e => e.getScreenCTM().a") > 0.8
+        assert page.locator("#monthly-table tr").count() == 12
+        assert "Median CJ size" in page.locator("#activity-cards").inner_text()
+        assert "100,000" in page.locator("#activity-cards").inner_text()
+        assert "200 sat / maker" in page.locator("#activity-cards").inner_text()
+        assert page.locator("#market-chart .maker-line").count() == 1
+        assert page.locator("#market-chart .bonded-line").count() == 1
+        assert page.locator("#market-chart .capital-line").count() == 1
+        assert "5,000" in page.locator("#market-chart").inner_text()
+        assert "Annual ROI on bond" in page.locator("#maker-result").inner_text()
+        assert "nonnegative maker gains" in page.locator("#maker-assumptions").inner_text()
+        assert "90-day" in page.locator("#maker-period").inner_text()
+        assert "365 days" in page.locator("#maker-comparison").inner_text()
+        assert "inferred fee eligibility" in page.locator("#maker-drivers").inner_text()
+        assert "uncontested" not in page.locator("#maker-result").inner_text()
+        assert "Optimal relative fee" in page.locator("#maker-cards").inner_text()
+        assert "(optimal)" in page.locator("#maker-curve").inner_text()
+        assert "bond^1.3" in page.locator("#maker-bond-note").inner_text()
+        assert "ppm" not in page.locator("body").inner_text()
+        assert "%" in page.locator("#maker-cards .card").first.inner_text()
+        page.select_option("#year", "2020")
+        assert "0 of 12 months fully scanned" in page.locator("#coverage").inner_text()
+        assert page.locator("#activity-chart rect.bar").count() == 0
+        assert not errors
+        browser.close()

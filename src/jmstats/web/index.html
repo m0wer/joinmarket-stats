@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="JoinMarket mainnet activity, orderbook history, and estimated maker returns."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'"
+    />
+    <title>JoinMarket Stats</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="shell masthead">
+      <div>
+        <h1>JoinMarket Stats</h1>
+        <span class="muted">Bitcoin mainnet</span>
+      </div>
+      <label class="theme-control"
+        >Theme
+        <select id="theme" aria-label="Color theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select></label
+      >
+    </header>
+    <main class="shell">
+      <p class="estimate-note">
+        All figures are estimates from transaction shapes, conditional fee
+        evidence, and inferred taker limits.
+      </p>
+      <p id="updated" class="muted freshness">Loading data…</p>
+      <p id="error" hidden></p>
+      <noscript
+        >Enable JavaScript, or download
+        <a href="data.json">the dashboard JSON</a>.</noscript
+      >
+      <section id="activity">
+        <div class="section-head">
+          <h2>On-chain activity</h2>
+          <label class="period"
+            >Period
+            <select id="year" aria-label="Activity year">
+              <option value="all">All history</option>
+            </select></label
+          >
+        </div>
+        <p id="coverage" class="caption"></p>
+        <div id="activity-cards" class="cards"></div>
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Monthly transactions and volume</h3>
+            <div class="legend">
+              <span class="green">Transactions</span
+              ><span class="blue">Volume, BTC</span>
+            </div>
+          </div>
+          <div id="activity-chart" class="chart" aria-live="polite"></div>
+          <p class="caption">
+            Outlined bars are partial months. Gaps are unscanned, not zero.
+            Volume counts all equal outputs, including repeated mixing.
+          </p>
+        </article>
+        <details class="panel">
+          <summary>Monthly data</summary>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Coverage</th>
+                  <th>Transactions</th>
+                  <th>Volume, BTC</th>
+                  <th>Median CJ, sat</th>
+                  <th>Participants</th>
+                  <th>Median fee, sat</th>
+                  <th>Median relative fee</th>
+                  <th>Mean fee, sat</th>
+                  <th>Mean relative fee</th>
+                  <th>Fee samples</th>
+                </tr>
+              </thead>
+              <tbody id="monthly-table"></tbody>
+            </table>
+          </div>
+          <p class="caption">
+            Fees are estimated net maker gains, not observed gross payments.
+            Participants are inferred from equal outputs.
+          </p>
+          <a class="download" href="monthly.csv" download>Download CSV</a>
+        </details>
+      </section>
+      <section id="liquidity">
+        <div class="section-head">
+          <h2>Orderbook</h2>
+          <span id="market-time" class="caption"></span>
+        </div>
+        <div id="market-cards" class="cards market-cards"></div>
+        <article class="panel">
+          <h3>Orderbook history</h3>
+          <div id="market-chart" class="history-chart"></div>
+          <p class="caption">
+            Daily peaks for makers and bonded makers, including spam. Locked BTC
+            is the last reported daily total, deduplicated by bond outpoint.
+          </p>
+        </article>
+        <div class="two-col">
+          <article class="panel">
+            <h3>Offers by CoinJoin size</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CJ size, sat</th>
+                    <th>Eligible makers</th>
+                    <th>Median fee, sat</th>
+                  </tr>
+                </thead>
+                <tbody id="capacity-table"></tbody>
+              </table>
+            </div>
+            <p class="caption">
+              NG-default fee limits; cheapest eligible offer per maker and
+              positive-weight bond.
+            </p>
+          </article>
+          <article class="panel">
+            <h3>Advertised fees</h3>
+            <div id="advertised-fees"></div>
+          </article>
+        </div>
+      </section>
+      <section id="planner">
+        <div class="section-head">
+          <h2>Maker workbench</h2>
+          <span id="maker-period" class="caption">Historical ROI estimate</span>
+        </div>
+        <div id="maker-result"></div>
+        <p id="maker-assumptions" class="caption"></p>
+      </section>
+    </main>
+    <footer class="shell">
+      <span>All figures are estimates.</span
+      ><span
+        ><a href="data.json">JSON</a> · <a href="monthly.csv">CSV</a> ·
+        <a
+          href="https://joinmarket-ng.sgn.space/orderbook.json"
+          rel="noreferrer"
+          >Orderbook source</a
+        ></span
+      >
+    </footer>
+  </body>
+</html>

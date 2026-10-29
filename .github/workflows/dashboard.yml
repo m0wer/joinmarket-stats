@@ -1,0 +1,88 @@
+name: Validate and publish dashboard
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore: ['data/**']
+  pull_request:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Scheduled, manual, and code-triggered publishers share one archive writer.
+concurrency:
+  group: joinmarket-stats-${{ github.event_name == 'pull_request' && github.ref || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -r requirements-dev.txt -e .
+      - run: playwright install --with-deps chromium
+      - run: ruff check src tests && ruff format --check src tests
+      - run: pytest -q
+
+  publish:
+    if: always() && github.event_name != 'pull_request' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - run: docker build -t joinmarket-stats .
+      - name: Collect bounded incremental data and render
+        id: collect
+        continue-on-error: true
+        run: |
+          mkdir -p site
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$PWD/data:/app/data" -v "$PWD/site:/app/site" \
+            joinmarket-stats update --api https://mempool.space/api \
+            --interval 2 --request-budget 600 --max-blocks 200
+      - name: Commit completed observations
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(data): update mainnet observations'
+            git push
+          fi
+      - name: Keep the existing deployment if rendering did not finish
+        run: test -s site/index.html && test -s site/data.json
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
+      - name: Surface collection errors after publishing retained observations
+        if: steps.collect.outcome == 'failure'
+        run: |
+          echo '::error::Collection failed. Retained observations were rendered. Inspect collector logs before the next run.'
+          exit 1

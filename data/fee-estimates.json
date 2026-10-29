@@ -1,0 +1,131 @@
+{
+  "kind": "conditional_solver_net_gain",
+  "months": {
+    "2025-01": {
+      "median_sats": 210,
+      "median_ppm": 50.000762019258296,
+      "maker_samples": 7499,
+      "transactions": 1105
+    },
+    "2025-02": {
+      "median_sats": 292.0,
+      "median_ppm": 76.97256649246697,
+      "maker_samples": 5030,
+      "transactions": 659
+    },
+    "2025-03": {
+      "median_sats": 276,
+      "median_ppm": 72.85564622035974,
+      "maker_samples": 5175,
+      "transactions": 720
+    },
+    "2025-04": {
+      "median_sats": 343,
+      "median_ppm": 99.97284737465304,
+      "maker_samples": 4143,
+      "transactions": 609
+    },
+    "2025-05": {
+      "median_sats": 270.0,
+      "median_ppm": 98.77454640224148,
+      "maker_samples": 3090,
+      "transactions": 434
+    },
+    "2025-06": {
+      "median_sats": 225.0,
+      "median_ppm": 70.98837678421964,
+      "maker_samples": 3486,
+      "transactions": 494
+    },
+    "2025-07": {
+      "median_sats": 380,
+      "median_ppm": 58.97717696669037,
+      "maker_samples": 4963,
+      "transactions": 737
+    },
+    "2025-08": {
+      "median_sats": 250.0,
+      "median_ppm": 25.972422317985682,
+      "maker_samples": 3726,
+      "transactions": 523
+    },
+    "2025-09": {
+      "median_sats": 370,
+      "median_ppm": 78.01903710309055,
+      "maker_samples": 5199,
+      "transactions": 708
+    },
+    "2025-10": {
+      "median_sats": 552.0,
+      "median_ppm": 99.93477661122236,
+      "maker_samples": 5180,
+      "transactions": 749
+    },
+    "2025-11": {
+      "median_sats": 298.5,
+      "median_ppm": 48.05398143593585,
+      "maker_samples": 5560,
+      "transactions": 757
+    },
+    "2025-12": {
+      "median_sats": 270.0,
+      "median_ppm": 50.9999589450661,
+      "maker_samples": 6032,
+      "transactions": 837
+    },
+    "2026-01": {
+      "median_sats": 209,
+      "median_ppm": 25.040307172867692,
+      "maker_samples": 6919,
+      "transactions": 933
+    },
+    "2026-02": {
+      "median_sats": 432,
+      "median_ppm": 76.12445260508751,
+      "maker_samples": 4805,
+      "transactions": 700
+    },
+    "2026-03": {
+      "median_sats": 490,
+      "median_ppm": 98.83271504057436,
+      "maker_samples": 4227,
+      "transactions": 591
+    },
+    "2026-04": {
+      "median_sats": 852.5,
+      "median_ppm": 119.78272259951225,
+      "maker_samples": 3688,
+      "transactions": 547
+    },
+    "2026-05": {
+      "median_sats": 763.5,
+      "median_ppm": 98.98805120360171,
+      "maker_samples": 3186,
+      "transactions": 478
+    },
+    "2026-06": {
+      "median_sats": 767,
+      "median_ppm": 78.69145552437625,
+      "maker_samples": 3479,
+      "transactions": 507
+    },
+    "2026-07": {
+      "median_sats": 781.5,
+      "median_ppm": 99.99606015522988,
+      "maker_samples": 4098,
+      "transactions": 616
+    },
+    "2026-08": {
+      "median_sats": 584.0,
+      "median_ppm": 100.0,
+      "maker_samples": 4674,
+      "transactions": 662
+    },
+    "2026-09": {
+      "median_sats": 671.5,
+      "median_ppm": 100.01510597980203,
+      "maker_samples": 1892,
+      "transactions": 264
+    }
+  }
+}

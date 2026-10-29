@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "detector": "equal-outputs-half-v1-min1",
+  "scan_start": 877259,
+  "cooldown_until": 0.0,
+  "provenance": [
+    "Imported joinmarket_analyzer full-block corpus from height 877259; conditional solver gains: max(0.5% denomination, 10,000 sat), one feasible solution, uniqueness not proven. Detector: equal-outputs-half-v1-min1"
+  ]
+}

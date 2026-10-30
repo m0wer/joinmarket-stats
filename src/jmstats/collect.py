@@ -24,6 +24,7 @@ from .snapshots import reduce_bond_snapshot, reduce_snapshot
 from .solver import Amounts, Result, analyze
 
 MAINNET_GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+HASH_BATCH_SIZE = 10
 
 
 class HistoryPoint(BaseModel):
@@ -77,6 +78,37 @@ def initialize(root: Path, start: int) -> None:
     )
 
 
+def _block_hashes(client: JsonClient, first: int, last: int) -> dict[int, str]:
+    """Read a requested height range from a descending Esplora block page.
+
+    Esplora returns ten rows, while mempool instances can return fifteen.
+    Older overlapping rows are metadata only, never extra block downloads.
+    """
+    page = client.get(f"/blocks/{last}")
+    if not isinstance(page, list):
+        raise ValueError("Invalid block hash batch")
+    hashes, seen = {}, set()
+    for row in page:
+        if not isinstance(row, dict):
+            raise ValueError("Invalid block hash batch")
+        height, block_hash = row.get("height"), row.get("id")
+        if (
+            type(height) is not int
+            or not 0 <= height <= last
+            or height in hashes
+            or not isinstance(block_hash, str)
+            or len(block_hash) != 64
+            or any(char not in "0123456789abcdef" for char in block_hash)
+            or block_hash in seen
+        ):
+            raise ValueError("Invalid block hash batch")
+        hashes[height] = block_hash
+        seen.add(block_hash)
+    if any(height not in hashes for height in range(first, last + 1)):
+        raise ValueError("Incomplete block hash batch")
+    return {height: hashes[height] for height in range(first, last + 1)}
+
+
 def collect_chain(
     archive: Archive,
     client: JsonClient,
@@ -94,6 +126,7 @@ def collect_chain(
     fees = FeeStore(archive.root) if solve_fees else None
     archive.before_flush = fees.flush if fees is not None else None
     solver_outcomes = Counter()
+    hashes = {}
     try:
         if client.text("/block-height/0") != MAINNET_GENESIS:
             raise ValueError("The configured API is not Bitcoin mainnet")
@@ -107,7 +140,10 @@ def collect_chain(
             if height in archive.blocks:
                 height += 1
                 continue
-            block_hash = client.text(f"/block-height/{height}")
+            if height not in hashes:
+                last = min(height + HASH_BATCH_SIZE - 1, tip)
+                hashes = _block_hashes(client, height, last)
+            block_hash = hashes.pop(height)
             block = scan_block(client.fetch(f"/block/{block_hash}/raw"))
             if block["hash"] != block_hash:
                 raise ValueError("API block hash does not match raw header")

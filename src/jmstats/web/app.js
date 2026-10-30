@@ -96,7 +96,7 @@ function makerFeesChart(months) {
     max = Math.max(
       1,
       ...months.map((m) =>
-        Math.max(m.maker_fee_high_sats || 0, m.maker_fee_estimate_sats || 0),
+        Math.max(m.maker_fee_interval_high_sats || 0, m.maker_fee_estimate_sats || 0),
       ),
     ),
     left = Math.max(55, fmt(max).length * 6 + 12),
@@ -120,7 +120,7 @@ function makerFeesChart(months) {
       svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "no maker fee estimate; " + feeSummary(m)}</title></text>`;
     } else {
       const partial = m.coverage !== "complete" || m.maker_fee_partial,
-        title = `<title>${m.month}: ${fmt(total)} sats estimated, ${fmt(m.maker_fee_exact_sats)} exact, ${fmt(m.maker_fee_unresolved_sats)} for unresolved; range ${fmt(m.maker_fee_low_sats)} to ${fmt(m.maker_fee_high_sats)}; ${feeSummary(m)}; ${m.coverage} block coverage</title>`,
+        title = `<title>${m.month}: ${fmt(total)} sats estimated${m.maker_fee_interval_high_sats > m.maker_fee_interval_low_sats ? ` (90% interval ${fmt(m.maker_fee_interval_low_sats)} to ${fmt(m.maker_fee_interval_high_sats)})` : ""}, ${fmt(m.maker_fee_exact_sats)} exact, ${fmt(m.maker_fee_floor_sats)} proven minimum, ${fmt(m.maker_fee_unresolved_sats)} estimated for unresolved; ${feeSummary(m)}; ${m.coverage} block coverage</title>`,
         exactTop = y(m.maker_fee_exact_sats),
         totalTop = Math.min(y(total), top + ph - 1);
       svg += `<g class="fee-month">${title}`;
@@ -128,9 +128,9 @@ function makerFeesChart(months) {
       svg += `<rect class="bar fee-exact" x="${x - bw / 2}" y="${exactTop}" width="${bw}" height="${top + ph - exactTop}"/>`;
       if (partial)
         svg += `<rect class="fee-partial" x="${x - bw / 2}" y="${totalTop}" width="${bw}" height="${top + ph - totalTop}"/>`;
-      if (m.maker_fee_high_sats > m.maker_fee_low_sats) {
-        const lo = y(m.maker_fee_low_sats),
-          hi = y(m.maker_fee_high_sats),
+      if (m.maker_fee_interval_high_sats > m.maker_fee_interval_low_sats) {
+        const lo = y(m.maker_fee_interval_low_sats),
+          hi = y(m.maker_fee_interval_high_sats),
           cap = Math.min(4, bw / 3);
         svg += `<path class="fee-range" d="M${x},${lo}V${hi}M${x - cap},${lo}H${x + cap}M${x - cap},${hi}H${x + cap}"/>`;
       }
@@ -139,7 +139,53 @@ function makerFeesChart(months) {
     if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
       svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly estimated maker fee totals in sats: exact part, estimated part, and the range implied by proven per-transaction bounds">${svg}<text x="${left}" y="10">sats</text></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly estimated maker fee totals in sats: exact part, estimated part, and 90% model interval">${svg}<text x="${left}" y="10">sats</text></svg>`;
+}
+function takerCostChart(months) {
+  if (!months.length) return '<p class="empty">No scanned activity yet.</p>';
+  if (!months.some((m) => m.taker_cost_median_percent != null))
+    return '<p class="empty">No taker cost estimates for this period.</p>';
+  const w = Math.max(280, $("taker-cost-chart").clientWidth),
+    h = $("taker-cost-chart").clientHeight,
+    small = w < 600,
+    max = Math.max(0.01, ...months.map((m) => m.taker_cost_p75_percent || 0)) * 1.05,
+    left = 55,
+    right = 20,
+    top = 20,
+    bottom = 30,
+    pw = w - left - right,
+    ph = h - top - bottom,
+    step = pw / months.length,
+    y = (v) => top + ph - (v / max) * ph;
+  let svg = "",
+    band = "",
+    line = "",
+    run = [];
+  const flush = () => {
+    if (run.length) {
+      band += `M${run.map(([x, m]) => `${x.toFixed(2)},${y(m.taker_cost_p75_percent).toFixed(2)}`).join("L")}L${[...run].reverse().map(([x, m]) => `${x.toFixed(2)},${y(m.taker_cost_p25_percent).toFixed(2)}`).join("L")}Z `;
+      line += `M${run.map(([x, m]) => `${x.toFixed(2)},${y(m.taker_cost_median_percent).toFixed(2)}`).join("L")} `;
+    }
+    run = [];
+  };
+  for (let i = 0; i <= 4; i++) {
+    const gy = top + (ph * i) / 4;
+    svg += `<line class="axis" x1="${left}" x2="${w - right}" y1="${gy}" y2="${gy}"/><text x="${left - 10}" y="${gy + 4}" text-anchor="end">${percent(max * (1 - i / 4))}</text>`;
+  }
+  months.forEach((m, i) => {
+    const x = left + step * (i + 0.5);
+    if (m.taker_cost_median_percent == null) {
+      flush();
+      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "no taker cost estimate"}</title></text>`;
+    } else {
+      run.push([x, m]);
+      svg += `<circle class="cost-point" cx="${x}" cy="${y(m.taker_cost_median_percent)}" r="${small ? 2 : 2.5}"><title>${m.month}: median ${percent(m.taker_cost_median_percent)} of the CoinJoin amount (middle half ${percent(m.taker_cost_p25_percent)} to ${percent(m.taker_cost_p75_percent)}), ${fmt(m.taker_cost_samples)} CoinJoins${m.coverage !== "complete" || m.maker_fee_partial ? "; partial month" : ""}</title></circle>`;
+    }
+    if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
+      svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
+  });
+  flush();
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly median taker cost per CoinJoin, maker fees plus network fee as a percentage of the amount, with the interquartile band"><path class="cost-band" d="${band}"/><path class="cost-line" d="${line}"/>${svg}<text x="${left}" y="10">% of amount</text></svg>`;
 }
 function activity() {
   const months = dataset.months.filter(
@@ -150,7 +196,7 @@ function activity() {
       [...seen].reverse().find((m) => m.coverage === "complete") || seen.at(-1);
   const label = (field) =>
     latest
-      ? `${latest.month}, ${fmt(latest.maker_fee_fixed_slots)} exactly known makers; p90 ${field}`
+      ? `${latest.month}, ${fmt(latest.maker_fee_fixed_slots)} of ${fmt(latest.maker_fee_slots)} makers exact; p90 ${field}`
       : "No fee observations";
   $("coverage").textContent =
     `${months.filter((m) => m.coverage === "complete").length} of ${months.length} months fully scanned. ${months.filter((m) => m.coverage === "unscanned").length} unscanned. Latest block: ${dataset.last_scanned_at ? new Date(dataset.last_scanned_at).toLocaleString("en-US", { timeZone: "UTC" }) + " UTC" : "none"}.`;
@@ -194,11 +240,12 @@ function activity() {
   ]);
   $("activity-chart").innerHTML = activityChart(months);
   $("maker-fees-chart").innerHTML = makerFeesChart(months);
+  $("taker-cost-chart").innerHTML = takerCostChart(months);
   $("monthly-table").innerHTML = [...months]
     .reverse()
     .map(
       (m) =>
-        `<tr><td>${m.month}</td><td>${m.coverage}</td><td>${fmt(m.count)}</td><td>${btc(m.volume_sats)}</td><td>${fmt(m.median_size_sats)}</td><td>${amount(m.median_participants)}</td><td>${fmt(m.maker_fee_estimate_sats)}${m.maker_fee_partial ? " (partial)" : ""}</td><td>${m.maker_fee_low_sats == null ? "N/A" : `${fmt(m.maker_fee_low_sats)} to ${fmt(m.maker_fee_high_sats)}`}</td><td>${fmt(m.maker_fee_exact_sats)}</td><td>${fmt(m.maker_fee_mean_sats)}</td><td>${rate(m.maker_fee_mean_percent)}</td><td>${fmt(m.maker_fee_median_sats)}</td><td>${rate(m.maker_fee_median_percent)}</td><td>${fmt(m.maker_fee_p90_sats)}</td><td>${rate(m.maker_fee_p90_percent)}</td><td>${fmt(m.maker_fee_fixed_slots)} / ${fmt(m.maker_fee_slots)}</td><td>${[m.maker_fee_identified, m.maker_fee_ambiguous, m.maker_fee_unresolved, m.maker_fee_unanalyzed].map((v) => fmt(v)).join(" / ")}</td><td>${fmt(m.inconsistent)}</td></tr>`,
+        `<tr><td>${m.month}</td><td>${m.coverage}</td><td>${fmt(m.count)}</td><td>${btc(m.volume_sats)}</td><td>${fmt(m.median_size_sats)}</td><td>${amount(m.median_participants)}</td><td>${fmt(m.maker_fee_estimate_sats)}${m.maker_fee_partial ? " (partial)" : ""}</td><td>${m.maker_fee_interval_low_sats == null ? "N/A" : `${fmt(m.maker_fee_interval_low_sats)} to ${fmt(m.maker_fee_interval_high_sats)}`}</td><td>${fmt(m.maker_fee_floor_sats)}</td><td>${fmt(m.maker_fee_exact_sats)}</td><td>${fmt(m.maker_fee_mean_sats)}</td><td>${rate(m.maker_fee_mean_percent)}</td><td>${fmt(m.maker_fee_median_sats)}</td><td>${rate(m.maker_fee_median_percent)}</td><td>${fmt(m.maker_fee_p90_sats)}</td><td>${rate(m.maker_fee_p90_percent)}</td><td>${fmt(m.maker_fee_fixed_slots)} / ${fmt(m.maker_fee_slots)}</td><td>${[m.maker_fee_identified, m.maker_fee_ambiguous, m.maker_fee_unresolved, m.maker_fee_unanalyzed].map((v) => fmt(v)).join(" / ")}</td><td>${fmt(m.inconsistent)}</td><td>${m.taker_cost_median_percent == null ? "N/A" : `${percent(m.taker_cost_median_percent)} (${percent(m.taker_cost_p25_percent)} to ${percent(m.taker_cost_p75_percent)})`}</td></tr>`,
     )
     .join("");
 }

@@ -76,19 +76,36 @@
             <div class="legend">
               <span class="green">Exact, sats</span>
               <span class="green-soft">Estimated</span>
-              <span class="gold">Proven range</span>
+              <span class="gold">90% interval</span>
             </div>
           </div>
           <div id="maker-fees-chart" class="chart" aria-live="polite"></div>
           <p class="caption">
             Net maker gains (fees minus any network fee contribution), not
             observed gross payments. Each transaction is searched exactly. Dark
-            bars are totals known exactly; light bars add estimates for
-            transactions whose decomposition is ambiguous or exceeds the search
-            budget, from fee rates of identified transactions of similar size.
-            Whiskers show the range implied by proven per-transaction bounds.
-            Transactions inconsistent with JoinMarket are excluded. Dashed
-            outlines mark partial months.
+            bars are totals known exactly (the taker's inputs are determined);
+            light bars add the mean of Monte Carlo draws for transactions whose
+            decomposition is ambiguous or exceeds the search budget, from the
+            maker fees of identified CoinJoins of similar size, consistent with
+            each transaction's proven bounds and known makers. Whiskers show the
+            90% interval of the draws. Transactions inconsistent with
+            JoinMarket are excluded. Dashed outlines mark partial months.
+          </p>
+        </article>
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Taker cost per CoinJoin</h3>
+            <div class="legend">
+              <span class="blue">Median, % of amount</span>
+              <span class="blue-soft">Middle half</span>
+            </div>
+          </div>
+          <div id="taker-cost-chart" class="chart" aria-live="polite"></div>
+          <p class="caption">
+            Maker fees plus the network fee, as a percentage of the CoinJoin
+            amount, per CoinJoin; estimated maker fees use the same draws as
+            the totals. Covers CoinJoins of at least 75,000 sats with a known
+            network fee. The band spans the 25th to 75th percentile.
           </p>
         </article>
         <details class="panel">
@@ -104,7 +121,8 @@
                   <th>Median CJ, sat</th>
                   <th>Participants</th>
                   <th>Maker fees, sat</th>
-                  <th>Proven range, sat</th>
+                  <th>90% interval, sat</th>
+                  <th>Proven minimum, sat</th>
                   <th>Exact part, sat</th>
                   <th>Mean fee, sat</th>
                   <th>Mean relative fee</th>
@@ -115,6 +133,7 @@
                   <th>Known makers</th>
                   <th>Identified / bounded / unresolved / unanalyzed</th>
                   <th>Inconsistent</th>
+                  <th>Taker cost, median (middle half)</th>
                 </tr>
               </thead>
               <tbody id="monthly-table"></tbody>
@@ -122,9 +141,9 @@
           </div>
           <p class="caption">
             Fees are net maker gains, not observed gross payments. Medians and
-            p90 use makers whose gain is identical in every valid
-            decomposition, weighted by denomination decade. Participants are
-            inferred from equal outputs.
+            p90 are per maker: gains identical in every valid decomposition,
+            plus Monte Carlo draws for the other makers. The proven minimum is
+            a hard lower bound. Participants are inferred from equal outputs.
           </p>
           <a class="download" href="monthly.csv" download>Download CSV</a>
         </details>

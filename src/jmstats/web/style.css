@@ -271,6 +271,22 @@ section {
   stroke: var(--gold);
   stroke-width: 1.4;
 }
+.blue-soft {
+  color: var(--blue);
+  opacity: 0.55;
+}
+.cost-band {
+  fill: var(--blue);
+  opacity: 0.15;
+}
+.cost-line {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2;
+}
+.cost-point {
+  fill: var(--blue);
+}
 .maker-line {
   fill: none;
   stroke: var(--green);

@@ -1,5 +1,6 @@
 import functools
 import http.server
+import re
 import threading
 from datetime import UTC, datetime
 
@@ -122,7 +123,7 @@ def test_dashboard_local_only_responsive_and_interactive(dashboard, width):
         assert "100,000" in page.locator("#activity-cards").inner_text()
         cards = page.locator("#activity-cards").inner_text()
         assert "150 sat / maker" in cards
-        assert "2 exactly known makers; p90 250 sat" in cards
+        assert "2 of 2 makers exact; p90 250 sat" in cards
         assert page.locator("#market-chart .maker-line").count() == 1
         assert page.locator("#market-chart .bonded-line").count() == 1
         assert page.locator("#market-chart .capital-line").count() == 1
@@ -171,21 +172,36 @@ def test_fee_chart_sats_zeroes_gaps_coverage_and_year_filter(dashboard, width):
                     "volume_sats": 0,
                     "maker_fee_estimate_sats": estimate,
                     "maker_fee_exact_sats": exact,
-                    "maker_fee_low_sats": low,
-                    "maker_fee_high_sats": high,
+                    "maker_fee_interval_low_sats": low,
+                    "maker_fee_interval_high_sats": high,
+                    "maker_fee_floor_sats": exact,
                     "maker_fee_partial": partial,
+                    "taker_cost_p25_percent": None if cost is None else cost / 2,
+                    "taker_cost_median_percent": cost,
+                    "taker_cost_p75_percent": None if cost is None else cost * 2,
+                    "taker_cost_samples": 0 if cost is None else 3,
                     "maker_fee_identified": 2,
                     "inconsistent": 1,
                     "coverage": coverage,
                 }
-                for month, count, estimate, exact, low, high, partial, coverage in [
-                    ("2025-01", 3, 123_456_789, 10**8, 12 * 10**7, 13 * 10**7, False, "complete"),
-                    ("2025-02", 2, 0, 0, 0, 0, False, "partial"),
-                    ("2025-03", 1, None, 0, None, None, False, "complete"),
-                    ("2025-04", None, None, None, None, None, False, "unscanned"),
-                    ("2025-05", 0, None, None, None, None, False, "complete"),
-                    ("2025-06", 4, 500, 200, 300, 900, True, "complete"),
-                    ("2026-01", 1, 100, 100, 100, 100, False, "partial"),
+                for month, count, estimate, exact, low, high, partial, coverage, cost in [
+                    (
+                        "2025-01",
+                        3,
+                        123_456_789,
+                        10**8,
+                        12 * 10**7,
+                        13 * 10**7,
+                        False,
+                        "complete",
+                        0.25,
+                    ),
+                    ("2025-02", 2, 0, 0, 0, 0, False, "partial", 0.125),
+                    ("2025-03", 1, None, 0, None, None, False, "complete", None),
+                    ("2025-04", None, None, None, None, None, False, "unscanned", None),
+                    ("2025-05", 0, None, None, None, None, False, "complete", None),
+                    ("2025-06", 4, 500, 200, 300, 900, True, "complete", 0.5),
+                    ("2026-01", 1, 100, 100, 100, 100, False, "partial", 0.1),
                 ]
             ]
             route.fulfill(json=payload)
@@ -202,13 +218,15 @@ def test_fee_chart_sats_zeroes_gaps_coverage_and_year_filter(dashboard, width):
         assert chart.locator(".fee-partial").count() == 2
         assert chart.locator(".fee-range").count() == 2
         text = chart.text_content()
-        assert "2025-01: 123,456,789 sats estimated, 100,000,000 exact" in text
-        assert "range 120,000,000 to 130,000,000" in text
+        assert (
+            "2025-01: 123,456,789 sats estimated (90% interval 120,000,000 to 130,000,000),"
+            " 100,000,000 exact, 100,000,000 proven minimum" in text
+        )
         assert "1 inconsistent excluded" in text
         assert "2025-02: 0 sats estimated" in text
         assert "2025-03: no maker fee estimate" in text
         assert "2025-04: unscanned" in text
-        assert "Solved" not in text and "%" not in text
+        assert re.search(r"\bsolved\b", text, re.IGNORECASE) is None  # No "% solved".
         activity = page.locator("#activity-chart").text_content()
         assert "2025-01: 3 transactions, 0 BTC, complete; 1 inconsistent with" in activity
         assert "5 inconsistent excluded" in page.locator("#activity-cards").inner_text()
@@ -217,8 +235,20 @@ def test_fee_chart_sats_zeroes_gaps_coverage_and_year_filter(dashboard, width):
         imputed = chart.locator(".fee-imputed").first.bounding_box()
         assert imputed["y"] + imputed["height"] == pytest.approx(exact["y"], abs=0.5)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        # Taker cost: points with a band, broken at months without an estimate.
+        cost = page.locator("#taker-cost-chart")
+        assert cost.locator(".cost-point").count() == 3
+        assert cost.locator(".cost-line").get_attribute("d").count("M") == 2
+        assert cost.locator(".cost-band").get_attribute("d").count("Z") == 2
+        assert (
+            "2025-01: median 0.25% of the CoinJoin amount (middle half 0.13% to 0.50%), 3"
+            " CoinJoins" in cost.text_content()
+        )
+        assert "2025-06: median 0.50%" in cost.text_content()
+        assert "partial month" in cost.text_content()
         page.select_option("#year", "all")
         assert chart.locator(".fee-month").count() == 4
+        assert cost.locator(".cost-point").count() == 4
         assert not errors
         browser.close()
 
@@ -234,12 +264,14 @@ def test_fee_chart_without_estimates_and_older_json_versions(dashboard):
             payload.update(version)
             for month in payload["months"]:
                 month.pop("maker_fee_estimate_sats", None)
+                month.pop("taker_cost_median_percent", None)
             route.fulfill(json=payload)
 
         page.route("**/data.json", data)
         page.goto(dashboard)
         page.wait_for_selector("#maker-fees-chart .empty")
         assert "No maker fee estimates" in page.locator("#maker-fees-chart").inner_text()
+        assert "No taker cost estimates" in page.locator("#taker-cost-chart").inner_text()
         assert not page.locator("#error").is_visible()
         version["schema_version"] = 1
         page.reload()

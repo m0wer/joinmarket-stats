@@ -316,3 +316,158 @@ def test_activity_history_keeps_zeroes_and_gaps_but_not_empty_leading_years(
             assert page.locator("#monthly-table tr").count() == 0
             assert "No scanned activity yet" in page.locator("#activity-chart").inner_text()
         browser.close()
+
+
+@pytest.mark.parametrize("width", [1440, 375])
+def test_chart_values_are_immediate_off_marker_and_keyboard_accessible(dashboard, width):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(viewport={"width": width, "height": 1000})
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(dashboard)
+        page.wait_for_selector("#maker-cards .value")
+        page.select_option("#year", "2025")
+        tooltip = page.locator("#chart-tooltip")
+        assert not tooltip.is_visible()
+        page.locator("#year").focus()
+        page.keyboard.press("Tab")
+        page.evaluate("""() => new Promise(resolve => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        })""")
+        assert page.locator("#activity-chart .chart-hit").first.evaluate(
+            "hit => hit === document.activeElement"
+        )
+        assert tooltip.is_visible()
+        page.keyboard.press("Escape")
+
+        for chart_id, detail in [
+            ("activity-chart", "1 transactions"),
+            ("maker-fees-chart", "400 sats estimated"),
+            ("taker-cost-chart", "median"),
+            ("market-chart", "5,000 total makers (daily peak)"),
+        ]:
+            chart = page.locator(f"#{chart_id}")
+            assert "Hover or tap anywhere" in page.locator(f"#{chart_id}-hint").inner_text()
+            assert chart.locator("title").count() == 0  # No delayed native popup.
+            hits = chart.locator(".chart-hit")
+            assert chart.locator('.chart-hit[tabindex="0"]').count() == 1
+            hits.first.scroll_into_view_if_needed()
+            # Near the top of the full-height column, not the plotted marker.
+            hits.first.hover(position={"x": 1, "y": 2})
+            assert tooltip.is_visible()
+            assert detail in tooltip.inner_text()
+            assert "is-active" in hits.first.get_attribute("class")
+            assert hits.first.get_attribute("aria-describedby") == "chart-tooltip"
+            popup = tooltip.bounding_box()
+            assert popup["x"] >= 0 and popup["x"] + popup["width"] <= width
+            assert popup["y"] >= 0 and popup["y"] + popup["height"] <= 1000
+            page.keyboard.press("Escape")
+            assert not tooltip.is_visible()
+
+            # A dispatch and read in the SAME JS task proves there is no delay.
+            assert hits.first.evaluate("""hit => {
+                hit.dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+                return !document.getElementById('chart-tooltip').hidden;
+            }""")
+            assert hits.first.evaluate("""hit => {
+                hit.closest('svg').parentElement.dispatchEvent(
+                    new PointerEvent('pointerleave', {pointerType: 'mouse'})
+                );
+                hit.dispatchEvent(new PointerEvent('pointermove', {
+                    bubbles: true, pointerType: 'mouse'
+                }));
+                return !document.getElementById('chart-tooltip').hidden;
+            }""")
+            if hits.count() > 1:
+                height = hits.nth(1).bounding_box()["height"]
+                hits.nth(1).hover(position={"x": 1, "y": height - 2})
+                assert "2025-02" in tooltip.inner_text()
+            hits.first.focus()
+            assert tooltip.is_visible()
+            page.keyboard.press("End")
+            assert hits.last.evaluate("hit => hit === document.activeElement")
+            page.keyboard.press("Home")
+            assert hits.first.evaluate("hit => hit === document.activeElement")
+            if hits.count() > 1:
+                page.keyboard.press("ArrowRight")
+                assert hits.nth(1).evaluate("hit => hit === document.activeElement")
+                assert "2025-02" in tooltip.inner_text()
+                page.keyboard.press("ArrowLeft")
+                assert hits.first.evaluate("hit => hit === document.activeElement")
+            page.keyboard.press("Escape")
+            assert not tooltip.is_visible()
+            page.keyboard.press("Tab")
+            assert not chart.evaluate("el => el.contains(document.activeElement)")
+            page.locator("#year").focus()
+            assert not tooltip.is_visible()
+            page.mouse.move(0, 0)
+        assert not errors
+        browser.close()
+
+
+def test_chart_touch_values_gaps_and_rerender_cleanup(dashboard):
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page(
+            viewport={"width": 375, "height": 1000}, has_touch=True, is_mobile=True
+        )
+
+        def chart_data(route):
+            payload = route.fetch().json()
+            template = payload["months"][0]
+            payload["months"] = [
+                {
+                    **template,
+                    "month": month,
+                    "count": count,
+                    "volume_sats": 0 if count is not None else None,
+                    "coverage": "complete" if count is not None else "unscanned",
+                }
+                for month, count in [("2025-01", 0), ("2025-02", None), ("2025-03", 1)]
+            ]
+            payload["market_history"] = [
+                {"as_of": "2025-01-01", "makers": 0},
+                {
+                    "as_of": "2025-01-02",
+                    "makers": 25,
+                    "bonded_makers": 2,
+                    "locked_sats": 100_000_000,
+                },
+            ]
+            route.fulfill(json=payload)
+
+        page.route("**/data.json", chart_data)
+        page.goto(dashboard)
+        page.wait_for_selector("#maker-cards .value")
+        tooltip = page.locator("#chart-tooltip")
+        hits = page.locator("#activity-chart .chart-hit")
+        hits.first.tap(position={"x": 1, "y": 2})
+        assert tooltip.is_visible()
+        assert "0 transactions, 0 BTC" in tooltip.inner_text()
+        hits.nth(1).tap(position={"x": 1, "y": 2})
+        assert "2025-02\nunscanned" == tooltip.inner_text()
+        page.locator("#activity h2").tap()
+        assert not tooltip.is_visible()
+
+        hits.first.tap()
+        page.select_option("#year", "all")
+        assert not tooltip.is_visible()
+        assert page.locator(".chart-hit.is-active").count() == 0
+        assert page.locator(".chart-hint").count() == 4
+        hits.first.tap()
+        page.set_viewport_size({"width": 400, "height": 900})
+        page.wait_for_selector("#chart-tooltip", state="hidden")
+        assert page.locator(".chart-hit.is-active").count() == 0
+        assert page.locator(".chart-hint").count() == 4
+
+        market = page.locator("#market-chart .chart-hit")
+        market.first.tap()
+        assert "0 total makers" in tooltip.inner_text()
+        assert "N/A bonded makers" in tooltip.inner_text()
+        assert "N/A BTC locked" in tooltip.inner_text()
+        market.last.tap()
+        assert "2 bonded makers" in tooltip.inner_text()
+        assert "1 BTC locked" in tooltip.inner_text()
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        browser.close()

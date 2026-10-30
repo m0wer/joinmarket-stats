@@ -18,6 +18,133 @@ const percent = (n) =>
     ? "N/A"
     : `${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, ...(Math.abs(n) < 0.1 && n !== 0 ? { maximumSignificantDigits: 2, minimumSignificantDigits: 1 } : {}) })}%`;
 let dataset;
+let hideChartTooltip = () => {};
+
+// Full-height columns select the nearest x value, not a tiny line or marker.
+function chartHitAreas(points, left, right, top, bottom) {
+  const escape = (text) =>
+    text.replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+    );
+  return points
+    .map(([x, label], i) => {
+      const start = i ? (points[i - 1][0] + x) / 2 : left,
+        end = i + 1 < points.length ? (x + points[i + 1][0]) / 2 : right;
+      return `<g><rect class="chart-hit" x="${start}" y="${top}" width="${end - start}" height="${bottom - top}" tabindex="${i === 0 ? 0 : -1}" role="img" aria-label="${escape(label)}"/><line class="chart-cursor" x1="${x}" x2="${x}" y1="${top}" y2="${bottom}"/></g>`;
+    })
+    .join("");
+}
+
+function chartTooltips() {
+  const tooltip = document.createElement("div");
+  tooltip.id = "chart-tooltip";
+  tooltip.className = "chart-tooltip";
+  tooltip.setAttribute("role", "tooltip");
+  tooltip.hidden = true;
+  document.body.append(tooltip);
+  let active = null,
+    dismissed = null;
+  const hide = () => {
+    active?.classList.remove("is-active");
+    active?.removeAttribute("aria-describedby");
+    active = null;
+    tooltip.hidden = true;
+  };
+  const show = (hit, event) => {
+    if (!hit || hit === dismissed) return;
+    if (hit !== active) {
+      hide();
+      active = hit;
+      hit.classList.add("is-active");
+      hit.setAttribute("aria-describedby", tooltip.id);
+      const label = hit.getAttribute("aria-label"),
+        split = label.indexOf(": "),
+        heading = document.createElement("strong"),
+        values = document.createElement("div");
+      heading.textContent = label.slice(0, split);
+      values.textContent = label.slice(split + 2).replace(/; /g, "\n");
+      tooltip.replaceChildren(heading, values);
+      tooltip.hidden = false;
+    }
+    const box = hit.getBoundingClientRect(),
+      x = (box.left + box.right) / 2,
+      y = event?.clientY ?? box.top,
+      width = tooltip.offsetWidth,
+      height = tooltip.offsetHeight;
+    tooltip.style.left = `${Math.max(12, Math.min(x + 12, innerWidth - width - 12))}px`;
+    tooltip.style.top = `${Math.max(12, Math.min(y + 16, innerHeight - height - 12))}px`;
+  };
+  document.querySelectorAll(".chart, .history-chart").forEach((chart) => {
+    const hint = document.createElement("p");
+    hint.id = `${chart.id}-hint`;
+    hint.className = "chart-hint";
+    hint.textContent =
+      "Hover or tap anywhere in the plot for exact values. Keyboard: Tab, then arrow keys.";
+    chart.before(hint);
+    chart.addEventListener("pointerenter", () => {
+      dismissed = null;
+    });
+    chart.addEventListener("pointermove", (event) => {
+      if (event.pointerType === "touch") return;
+      const hit = event.target.closest(".chart-hit");
+      if (hit) show(hit, event);
+      else hide();
+    });
+    chart.addEventListener("pointerdown", (event) => {
+      dismissed = null;
+      const hit = event.target.closest(".chart-hit");
+      if (hit) show(hit, event);
+      else hide();
+    });
+    chart.addEventListener("pointerleave", (event) => {
+      if (event.pointerType !== "touch") {
+        hide();
+        dismissed = null;
+      }
+    });
+    chart.addEventListener("focusin", (event) => {
+      dismissed = null;
+      show(event.target.closest(".chart-hit"));
+    });
+    chart.addEventListener("focusout", hide);
+    chart.addEventListener("keydown", (event) => {
+      const hits = [...chart.querySelectorAll(".chart-hit")],
+        index = hits.indexOf(event.target);
+      if (index < 0) return;
+      let next;
+      if (event.key === "ArrowRight") next = Math.min(index + 1, hits.length - 1);
+      else if (event.key === "ArrowLeft") next = Math.max(index - 1, 0);
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = hits.length - 1;
+      else return;
+      event.preventDefault();
+      hits[index].tabIndex = -1;
+      hits[next].tabIndex = 0;
+      hits[next].focus({ preventScroll: true });
+    });
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".chart-hit")) hide();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      dismissed = active;
+      hide();
+    }
+  });
+  window.addEventListener(
+    "scroll",
+    () => {
+      // Tabbing into an offscreen chart scrolls it into view. Keep its values
+      // visible and anchored to the newly positioned, keyboard-focused column.
+      if (active === document.activeElement && active?.matches(":focus-visible"))
+        show(active);
+      else hide();
+    },
+    true,
+  );
+  return hide;
+}
 
 function theme() {
   try {
@@ -62,26 +189,31 @@ function activityChart(months) {
   let svg = "",
     line = "",
     connected = false;
+  const points = [];
   for (let i = 0; i <= 4; i++) {
     const y = top + (ph * i) / 4;
     svg += `<line class="axis" x1="${left}" x2="${w - right}" y1="${y}" y2="${y}"/><text x="${left - 10}" y="${y + 4}" text-anchor="end">${fmt(maxCount * (1 - i / 4))}</text><text x="${w - right + 10}" y="${y + 4}">${amount(maxVolume * (1 - i / 4))}</text>`;
   }
   months.forEach((m, i) => {
     const x = left + step * (i + 0.5);
+    let label;
     if (m.count == null) {
       connected = false;
-      svg += `<text x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: unscanned</title></text>`;
+      label = `${m.month}: unscanned`;
+      svg += `<text x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<desc>${label}</desc></text>`;
     } else {
       const bh = Math.max(1, (m.count / maxCount) * ph),
         y = top + ph - (m.volume_sats / SATS / maxVolume) * ph;
-      svg += `<rect class="bar ${m.coverage === "complete" ? "" : "partial"}" x="${x - step * 0.35}" y="${top + ph - bh}" width="${Math.max(1, step * 0.7)}" height="${bh}" rx="1"><title>${m.month}: ${fmt(m.count)} transactions, ${btc(m.volume_sats)} BTC, ${m.coverage}${m.inconsistent ? `; ${fmt(m.inconsistent)} inconsistent with JoinMarket excluded` : ""}${m.maker_fee_unanalyzed ? `; ${fmt(m.maker_fee_unanalyzed)} not yet analyzed` : ""}</title></rect>`;
+      label = `${m.month}: ${fmt(m.count)} transactions, ${btc(m.volume_sats)} BTC, ${m.coverage}${m.inconsistent ? `; ${fmt(m.inconsistent)} inconsistent with JoinMarket excluded` : ""}${m.maker_fee_unanalyzed ? `; ${fmt(m.maker_fee_unanalyzed)} not yet analyzed` : ""}`;
+      svg += `<rect class="bar ${m.coverage === "complete" ? "" : "partial"}" x="${x - step * 0.35}" y="${top + ph - bh}" width="${Math.max(1, step * 0.7)}" height="${bh}" rx="1"><desc>${label}</desc></rect>`;
       line += `${connected ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)} `;
       connected = true;
     }
+    points.push([x, label]);
     if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
       svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly transaction bars and equal-output volume line, with separate left and right axes"><text x="${left}" y="10">Transactions</text><text x="${w - right}" y="10" text-anchor="end">BTC</text>${svg}<path class="volume-line" d="${line}"/></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="group" aria-describedby="activity-chart-hint" aria-label="Monthly transaction bars and equal-output volume line, with separate left and right axes"><text x="${left}" y="10">Transactions</text><text x="${w - right}" y="10" text-anchor="end">BTC</text>${svg}<path class="volume-line" d="${line}"/>${chartHitAreas(points, left, w - right, top, top + ph)}</svg>`;
 }
 function feeSummary(m) {
   return `${fmt(m.maker_fee_identified)} identified, ${fmt(m.maker_fee_ambiguous)} bounded, ${fmt(m.maker_fee_unresolved)} unresolved, ${fmt(m.maker_fee_unanalyzed)} unanalyzed; ${fmt(m.inconsistent)} inconsistent excluded`;
@@ -108,6 +240,7 @@ function makerFeesChart(months) {
     step = pw / months.length,
     y = (v) => top + ph - (v / max) * ph;
   let svg = "";
+  const points = [];
   for (let i = 0; i <= 4; i++) {
     const gy = top + (ph * i) / 4;
     svg += `<line class="axis" x1="${left}" x2="${w - right}" y1="${gy}" y2="${gy}"/><text x="${left - 10}" y="${gy + 4}" text-anchor="end">${fmt(max * (1 - i / 4))}</text>`;
@@ -116,14 +249,16 @@ function makerFeesChart(months) {
     const x = left + step * (i + 0.5),
       bw = Math.max(1, step * 0.7),
       total = m.maker_fee_estimate_sats;
+    let label;
     if (m.count == null || total == null) {
-      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "no maker fee estimate; " + feeSummary(m)}</title></text>`;
+      label = `${m.month}: ${m.count == null ? "unscanned" : "no maker fee estimate; " + feeSummary(m)}`;
+      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<desc>${label}</desc></text>`;
     } else {
       const partial = m.coverage !== "complete" || m.maker_fee_partial,
-        title = `<title>${m.month}: ${fmt(total)} sats estimated${m.maker_fee_interval_high_sats > m.maker_fee_interval_low_sats ? ` (90% interval ${fmt(m.maker_fee_interval_low_sats)} to ${fmt(m.maker_fee_interval_high_sats)})` : ""}, ${fmt(m.maker_fee_exact_sats)} exact, ${fmt(m.maker_fee_floor_sats)} proven minimum, ${fmt(m.maker_fee_unresolved_sats)} estimated for unresolved; ${feeSummary(m)}; ${m.coverage} block coverage</title>`,
         exactTop = y(m.maker_fee_exact_sats),
         totalTop = Math.min(y(total), top + ph - 1);
-      svg += `<g class="fee-month">${title}`;
+      label = `${m.month}: ${fmt(total)} sats estimated${m.maker_fee_interval_high_sats > m.maker_fee_interval_low_sats ? ` (90% interval ${fmt(m.maker_fee_interval_low_sats)} to ${fmt(m.maker_fee_interval_high_sats)})` : ""}, ${fmt(m.maker_fee_exact_sats)} exact, ${fmt(m.maker_fee_floor_sats)} proven minimum, ${fmt(m.maker_fee_unresolved_sats)} estimated for unresolved; ${feeSummary(m)}; ${m.coverage} block coverage`;
+      svg += `<g class="fee-month"><desc>${label}</desc>`;
       svg += `<rect class="bar fee-imputed" x="${x - bw / 2}" y="${totalTop}" width="${bw}" height="${exactTop - totalTop}"/>`;
       svg += `<rect class="bar fee-exact" x="${x - bw / 2}" y="${exactTop}" width="${bw}" height="${top + ph - exactTop}"/>`;
       if (partial)
@@ -136,10 +271,11 @@ function makerFeesChart(months) {
       }
       svg += "</g>";
     }
+    points.push([x, label]);
     if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
       svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
   });
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly estimated maker fee totals in sats: exact part, estimated part, and 90% model interval">${svg}<text x="${left}" y="10">sats</text></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="group" aria-describedby="maker-fees-chart-hint" aria-label="Monthly estimated maker fee totals in sats: exact part, estimated part, and 90% model interval">${svg}<text x="${left}" y="10">sats</text>${chartHitAreas(points, left, w - right, top, top + ph)}</svg>`;
 }
 function takerCostChart(months) {
   if (!months.length) return '<p class="empty">No scanned activity yet.</p>';
@@ -161,6 +297,7 @@ function takerCostChart(months) {
     band = "",
     line = "",
     run = [];
+  const points = [];
   const flush = () => {
     if (run.length) {
       band += `M${run.map(([x, m]) => `${x.toFixed(2)},${y(m.taker_cost_p75_percent).toFixed(2)}`).join("L")}L${[...run].reverse().map(([x, m]) => `${x.toFixed(2)},${y(m.taker_cost_p25_percent).toFixed(2)}`).join("L")}Z `;
@@ -174,20 +311,25 @@ function takerCostChart(months) {
   }
   months.forEach((m, i) => {
     const x = left + step * (i + 0.5);
+    let label;
     if (m.taker_cost_median_percent == null) {
       flush();
-      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<title>${m.month}: ${m.count == null ? "unscanned" : "no taker cost estimate"}</title></text>`;
+      label = `${m.month}: ${m.count == null ? "unscanned" : "no taker cost estimate"}`;
+      svg += `<text class="fee-gap" x="${x}" y="${h - bottom - 5}" text-anchor="middle">·<desc>${label}</desc></text>`;
     } else {
       run.push([x, m]);
-      svg += `<circle class="cost-point" cx="${x}" cy="${y(m.taker_cost_median_percent)}" r="${small ? 2 : 2.5}"><title>${m.month}: median ${percent(m.taker_cost_median_percent)} of the CoinJoin amount (middle half ${percent(m.taker_cost_p25_percent)} to ${percent(m.taker_cost_p75_percent)}), ${fmt(m.taker_cost_samples)} CoinJoins${m.coverage !== "complete" || m.maker_fee_partial ? "; partial month" : ""}</title></circle>`;
+      label = `${m.month}: median ${percent(m.taker_cost_median_percent)} of the CoinJoin amount (middle half ${percent(m.taker_cost_p25_percent)} to ${percent(m.taker_cost_p75_percent)}), ${fmt(m.taker_cost_samples)} CoinJoins${m.coverage !== "complete" || m.maker_fee_partial ? "; partial month" : ""}`;
+      svg += `<circle class="cost-point" cx="${x}" cy="${y(m.taker_cost_median_percent)}" r="${small ? 2 : 2.5}"><desc>${label}</desc></circle>`;
     }
+    points.push([x, label]);
     if (i % Math.max(1, Math.ceil(months.length / (small ? 4 : 10))) === 0)
       svg += `<text x="${x}" y="${h - 5}" text-anchor="middle">${small && $("year").value !== "all" ? m.month.slice(5) : m.month}</text>`;
   });
   flush();
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Monthly median taker cost per CoinJoin, maker fees plus network fee as a percentage of the amount, with the interquartile band"><path class="cost-band" d="${band}"/><path class="cost-line" d="${line}"/>${svg}<text x="${left}" y="10">% of amount</text></svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="group" aria-describedby="taker-cost-chart-hint" aria-label="Monthly median taker cost per CoinJoin, maker fees plus network fee as a percentage of the amount, with the interquartile band"><path class="cost-band" d="${band}"/><path class="cost-line" d="${line}"/>${svg}<text x="${left}" y="10">% of amount</text>${chartHitAreas(points, left, w - right, top, top + ph)}</svg>`;
 }
 function activity() {
+  hideChartTooltip();
   const months = dataset.months.filter(
     (m) => $("year").value === "all" || m.month.startsWith($("year").value),
   );
@@ -298,7 +440,11 @@ function historyChart(history) {
   ) {
     svg += `<text x="${left + (i / Math.max(1, points.length - 1)) * (w - left - right)}" y="${h - 4}" text-anchor="middle">${points[i].day.slice(5)}</text>`;
   }
-  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Orderbook history: total makers including spam, bonded makers, and total reported locked BTC">${svg}</svg>`;
+  const details = points.map((p, i) => [
+    left + (points.length === 1 ? 0.5 : i / (points.length - 1)) * (w - left - right),
+    `${p.day}: ${fmt(p.makers)} total makers (daily peak); ${fmt(p.bonded)} bonded makers (daily peak); ${btc(p.locked)} BTC locked (last daily total)`,
+  ]);
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="group" aria-describedby="market-chart-hint" aria-label="Orderbook history: total makers including spam, bonded makers, and total reported locked BTC">${svg}${chartHitAreas(details, left, w - right, 10, h - 28)}</svg>`;
 }
 function market() {
   const m = dataset.market;
@@ -411,6 +557,7 @@ function maker() {
 }
 async function start() {
   theme();
+  hideChartTooltip = chartTooltips();
   try {
     const response = await fetch("data.json", { cache: "no-cache" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);

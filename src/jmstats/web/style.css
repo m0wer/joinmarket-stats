@@ -222,6 +222,54 @@ section {
 .chart {
   height: 285px;
 }
+.chart-hint {
+  color: var(--blue);
+  font-size: 12px;
+  margin: 10px 0 6px;
+}
+.chart-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.chart-hit.is-active,
+.chart-hit:focus-visible {
+  fill: var(--blue);
+  fill-opacity: 0.1;
+  outline: none;
+}
+.chart-cursor {
+  display: none;
+  stroke: var(--blue);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+.chart-hit.is-active + .chart-cursor,
+.chart-hit:focus-visible + .chart-cursor {
+  display: block;
+}
+.chart-tooltip {
+  position: fixed;
+  z-index: 10;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(400px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  box-sizing: border-box;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--blue);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px #0003;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.chart-tooltip strong {
+  display: block;
+  margin-bottom: 4px;
+}
 .chart svg,
 .history-chart svg {
   width: 100%;

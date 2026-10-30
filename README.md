@@ -1,6 +1,6 @@
 # JoinMarket Stats
 
-A static JoinMarket mainnet dashboard: monthly CoinJoin-shaped activity, historical orderbooks, and modeled maker returns. CJ sizes and fees use satoshis; relative fees use percent, as makers configure them. Transaction counts and BTC volume share one chart; monthly maker fee totals have a separate chart with exact and estimated parts and proven ranges. Light and dark themes follow the system by default, with a saved manual override. No CDNs, analytics, remote fonts, frontend packages, or runtime backend. The generated dashboard is about 180 KB before compression.
+A static JoinMarket mainnet dashboard: monthly CoinJoin-shaped activity, historical orderbooks, and modeled maker returns. CJ sizes and fees use satoshis; relative fees use percent, as makers configure them. Transaction counts and BTC volume share one chart; monthly maker fee totals have a separate chart with exact and estimated parts and 90% model intervals. Hover or tap anywhere in a chart's plot to inspect the nearest month's or day's values immediately, or Tab into a chart and use the arrow keys (Home/End jump to the first/last point; Escape dismisses the popup). Light and dark themes follow the system by default, with a saved manual override. No CDNs, analytics, remote fonts, frontend packages, or runtime backend. The generated dashboard is about 180 KB before compression.
 
 ## Run locally
 

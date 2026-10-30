@@ -40,8 +40,12 @@ def _metadata(directory: Path, expected: dict) -> list[Path]:
     paths = sorted(directory.glob("*.jsonl"))
     state = directory / "state.json"
     if state.exists():
-        if json.loads(state.read_text()) != expected:
-            raise ValueError(f"Unknown {directory.name} format or method")
+        found = json.loads(state.read_text())
+        if found != expected:
+            raise ValueError(
+                f"Unknown {directory.name} format or method: found {found}, expected"
+                f" {expected} (regenerate with analyze-fees)"
+            )
     elif paths:
         raise ValueError(f"{directory.name} metadata is missing")
     return paths

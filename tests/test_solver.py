@@ -1,5 +1,6 @@
 import itertools
 import random
+from collections import Counter
 
 import pytest
 
@@ -8,10 +9,13 @@ from jmstats.solver import Amounts, Result, analyze
 
 
 def brute_force(a: Amounts):
-    """Reference: every input-to-participant assignment, every taker, no pruning."""
+    """Reference: every input-to-participant assignment, every taker, no pruning.
+
+    Returns (low, high, fixed gains, options with multiplicity) or None.
+    """
     owners = a.changes + [0] * (a.participants - len(a.changes))
     targets = [a.denomination + change for change in owners]
-    totals, seen = set(), {s: set() for s in range(a.participants)}
+    decompositions = []
     for assignment in itertools.product(range(a.participants), repeat=len(a.inputs)):
         if len(set(assignment)) != a.participants:
             continue
@@ -21,12 +25,31 @@ def brute_force(a: Amounts):
         for taker in range(a.participants):
             makers = [s for s in range(a.participants) if s != taker]
             if all(0 <= gains[s] <= a.ceiling for s in makers):
-                totals.add(sum(gains[s] for s in makers))
-                seen[taker].add(None)
-                for s in makers:
-                    seen[s].add(gains[s])
-    fixed = sorted(next(iter(v)) for v in seen.values() if len(v) == 1 and None not in v)
-    return (min(totals), max(totals), fixed) if totals else None
+                decompositions.append({s: gains[s] for s in makers})
+    if not decompositions:
+        return None
+    fixed = {
+        s
+        for s in range(a.participants)
+        if all(s in d for d in decompositions) and len({d[s] for d in decompositions}) == 1
+    }
+    totals = [sum(d.values()) for d in decompositions]
+    options = Counter(
+        tuple(sorted(g for s, g in d.items() if s not in fixed)) for d in decompositions
+    )
+    if () in options or len(options) > solver.OPTION_LIMIT:
+        options = Counter()
+    return (
+        min(totals),
+        max(totals),
+        sorted(decompositions[0][s] for s in fixed),
+        sorted((list(o), c) for o, c in options.items()),
+    )
+
+
+def observed(result: Result):
+    options = sorted(zip(result.options, result.multiplicity, strict=True))
+    return (result.low, result.high, result.gains, [(o, c) for o, c in options])
 
 
 def joinmarket(rng, n, denomination=100_000, changeless=False):
@@ -59,7 +82,7 @@ def test_exact_bounds_and_fixed_gains_match_brute_force(seed):
     expected = brute_force(amounts)
     result = analyze(amounts)
     assert expected is not None
-    assert (result.low, result.high, result.gains) == expected
+    assert observed(result) == expected
     assert result.status == ("identified" if expected[0] == expected[1] else "ambiguous")
 
 
@@ -80,7 +103,7 @@ def test_random_shapes_agree_with_brute_force_including_inconsistent(seed):
         assert result.status == "inconsistent"
         assert result.low is result.high is None
     else:
-        assert (result.low, result.high, result.gains) == expected
+        assert observed(result) == expected
 
 
 def test_multi_input_taker_with_change_is_identified_when_unique():
@@ -91,7 +114,7 @@ def test_multi_input_taker_with_change_is_identified_when_unique():
         participants=3,
     )
     result = analyze(amounts)
-    assert brute_force(amounts) == (result.low, result.high, result.gains)
+    assert brute_force(amounts) == observed(result)
     assert amounts.network_fee == 20
 
 
@@ -152,7 +175,22 @@ def test_fixed_gain_enumeration_budget_keeps_bounds(monkeypatch):
     monkeypatch.setattr(solver, "DECOMPOSITION_LIMIT", 0)
     limited = analyze(amounts)
     assert (limited.status, limited.low, limited.high) == (full.status, full.low, full.high)
-    assert limited.gains == []
+    assert limited.gains == limited.options == limited.multiplicity == []
+
+
+def test_option_limit_keeps_bounds_and_fixed_gains(monkeypatch):
+    amounts = next(
+        a
+        for seed in range(100)
+        if len(analyze(a := joinmarket(random.Random(seed), 4)).options) > 1
+    )
+    full = analyze(amounts)
+    monkeypatch.setattr(solver, "OPTION_LIMIT", len(full.options) - 1)
+    limited = analyze(amounts)
+    assert limited.model_dump(exclude={"options", "multiplicity"}) == full.model_dump(
+        exclude={"options", "multiplicity"}
+    )
+    assert limited.options == limited.multiplicity == []
 
 
 @pytest.mark.parametrize(
@@ -164,6 +202,20 @@ def test_fixed_gain_enumeration_budget_keeps_bounds(monkeypatch):
         {"status": "inconsistent", "low": 0, "high": 0},
         {"status": "inconsistent", "gains": [1]},
         {"status": "ambiguous", "low": 1, "high": 3, "gains": [2, 1]},
+        {"status": "unresolved", "reason": "search", "options": [[1]], "multiplicity": [1]},
+        {"status": "ambiguous", "low": 1, "high": 3, "options": [[1], [3]], "multiplicity": [1]},
+        {"status": "ambiguous", "low": 1, "high": 3, "options": [[1]], "multiplicity": [0]},
+        {"status": "ambiguous", "low": 1, "high": 3, "options": [[3], [1]], "multiplicity": [1, 1]},
+        {"status": "ambiguous", "low": 1, "high": 3, "options": [[1], [1]], "multiplicity": [1, 1]},
+        {"status": "ambiguous", "low": 1, "high": 3, "options": [[2, 1]], "multiplicity": [1]},
+        {
+            "status": "ambiguous",
+            "low": 1,
+            "high": 3,
+            "options": [[1], [1, 2]],
+            "multiplicity": [1, 1],
+        },
+        {"status": "identified", "low": 1, "high": 1, "options": [[]], "multiplicity": [1]},
     ],
 )
 def test_invalid_results_fail_closed(fields):
@@ -178,6 +230,17 @@ def test_stored_result_checked_against_candidate():
         Result(status="identified", low=5, high=5, gains=[1, 2]).check(100_000, 3)
     with pytest.raises(ValueError, match="exceed the fee bound"):
         Result(status="ambiguous", low=2, high=9, gains=[3]).check(100_000, 3)
+    options = {"options": [[1, 2], [1, 5]], "multiplicity": [2, 1]}
+    Result(status="ambiguous", low=3, high=6, **options).check(100_000, 3)
+    for bad in (
+        Result(status="ambiguous", low=3, high=7, **options),  # does not span the bounds
+        Result(status="ambiguous", low=3, high=6, **options, gains=[0]),  # too many makers
+        Result(
+            status="identified", low=10_002, high=10_002, options=[[1, 10_001]], multiplicity=[1]
+        ),
+    ):
+        with pytest.raises(ValueError, match="options"):
+            bad.check(100_000, 3)
 
 
 def test_amounts_reject_mismatched_shapes():

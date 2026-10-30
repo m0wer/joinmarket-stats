@@ -20,11 +20,13 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, model_validator
 
 Sats = Annotated[int, Field(strict=True, ge=0)]
-METHOD = "exact-interval-v1"
+METHOD = "exact-interval-v2"
 # Deterministic work limits per transaction (roughly a few seconds of CPython).
 CANDIDATE_LIMIT = 50_000
 STEP_LIMIT = 30_000_000
 DECOMPOSITION_LIMIT = 10_000
+# Most distinct unknown-maker gain multisets stored per transaction (storage size).
+OPTION_LIMIT = 32
 
 
 def ceiling(denomination: int) -> int:
@@ -71,12 +73,17 @@ class Result(BaseModel):
     exists, so the transaction contradicts the model (usually not JoinMarket).
     unresolved: a budget was exceeded; nothing is known. ``gains`` holds the sorted
     maker gains that are equal in every decomposition (a subset of the makers).
+    ``options`` lists every distinct sorted gain multiset of the other makers, with
+    the number of decompositions giving each in ``multiplicity``. It is complete
+    when present and omitted when the enumeration budget or OPTION_LIMIT is hit.
     """
 
     status: Literal["identified", "ambiguous", "unresolved", "inconsistent"]
     low: Sats | None = None
     high: Sats | None = None
     gains: list[Sats] = []
+    options: list[list[Sats]] = []
+    multiplicity: list[Annotated[int, Field(strict=True, gt=0)]] = []
     reason: Literal["candidates", "search"] | None = None
 
     @model_validator(mode="after")
@@ -90,6 +97,16 @@ class Result(BaseModel):
             raise ValueError("Only unresolved transactions have a budget reason")
         if self.gains and not bounded or self.gains != sorted(self.gains):
             raise ValueError("Identified maker gains need resolved bounds")
+        if (
+            self.options
+            and not bounded
+            or len(self.multiplicity) != len(self.options)
+            or any(option != sorted(option) for option in self.options)
+            or any(a >= b for a, b in zip(self.options, self.options[1:], strict=False))
+            or len({len(option) for option in self.options}) > 1
+            or [] in self.options
+        ):
+            raise ValueError("Maker gain options must be distinct, sorted, and resolved")
         return self
 
     def check(self, denomination: int, participants: int) -> None:
@@ -104,6 +121,16 @@ class Result(BaseModel):
             raise ValueError("Identified maker gains exceed the fee bound")
         if len(self.gains) == makers and sum(self.gains) != self.low:
             raise ValueError("Identified maker gains do not match the total")
+        if self.options:
+            # Complete options cover every decomposition, so they span the bounds.
+            fixed = sum(self.gains)
+            totals = [fixed + sum(option) for option in self.options]
+            if (
+                len(self.options[0]) != makers - len(self.gains)
+                or max(option[-1] for option in self.options) > top
+                or (min(totals), max(totals)) != (self.low, self.high)
+            ):
+                raise ValueError("Maker gain options do not match the bounds")
 
 
 class _Budget(Exception):
@@ -163,11 +190,18 @@ class _Search:
         except _Budget as exc:
             return Result(status="unresolved", reason=exc.reason)
         try:
-            gains = self.fixed_gains(candidates)
+            gains, options = self.profile(candidates)
         except _Budget:
-            gains = []
+            gains, options = [], {}
         status = "identified" if low == high else "ambiguous"
-        return Result(status=status, low=low, high=high, gains=gains)
+        return Result(
+            status=status,
+            low=low,
+            high=high,
+            gains=gains,
+            options=[list(option) for option in options],
+            multiplicity=list(options.values()),
+        )
 
     def takers(self, candidates):
         """Yield (taker, maker slots by fewest groups) for each possible taker slot."""
@@ -220,27 +254,44 @@ class _Search:
 
         search(0, 0, 0)
 
-    def fixed_gains(self, candidates) -> list[int]:
-        """Maker gains equal across every decomposition, by bounded full enumeration."""
-        seen: dict[int, set[int | None]] = {s: set() for s in range(len(candidates))}
-        count = [0]
-        for taker, makers in self.takers(candidates):
-            self._enumerate_taker(candidates, taker, makers, seen, count)
-        return sorted(next(iter(v)) for v in seen.values() if len(v) == 1 and None not in v)
+    def profile(self, candidates) -> tuple[list[int], dict[tuple[int, ...], int]]:
+        """Fixed maker gains and the other makers' gain multisets, by bounded full enumeration.
 
-    def _enumerate_taker(self, candidates, taker, makers, seen, count) -> None:
+        A slot is fixed when it is a maker with the same gain in every decomposition.
+        Options (sorted multisets of the remaining maker gains, with decomposition
+        counts, in sorted order) are empty when every maker is fixed or there are
+        more than OPTION_LIMIT of them.
+        """
+        decompositions: list[tuple[int | None, ...]] = []
+        for taker, makers in self.takers(candidates):
+            self._enumerate_taker(candidates, taker, makers, decompositions)
+        first = decompositions[0]
+        fixed = {
+            s
+            for s in range(len(candidates))
+            if first[s] is not None and all(d[s] == first[s] for d in decompositions)
+        }
+        counts: dict[tuple[int, ...], int] = {}
+        for d in decompositions:
+            option = tuple(sorted(g for s, g in enumerate(d) if s not in fixed and g is not None))
+            counts[option] = counts.get(option, 0) + 1
+        if () in counts or len(counts) > OPTION_LIMIT:
+            counts = {}
+        return sorted(first[s] for s in fixed), dict(sorted(counts.items()))
+
+    def _enumerate_taker(self, candidates, taker, makers, decompositions) -> None:
         chosen = [0] * len(makers)
 
         def visit(k, used):
             if k == len(makers):
                 if used == self.full:
                     return
-                count[0] += 1
-                if count[0] > DECOMPOSITION_LIMIT:
+                if len(decompositions) >= DECOMPOSITION_LIMIT:
                     raise _Budget("search")
-                seen[taker].add(None)
+                gains: list[int | None] = [None] * len(candidates)
                 for s, mask in zip(makers, chosen, strict=True):
-                    seen[s].add(self.gain(s, mask))
+                    gains[s] = self.gain(s, mask)
+                decompositions.append(tuple(gains))
                 return
             for mask, _ in candidates[makers[k]]:
                 self.step("search")

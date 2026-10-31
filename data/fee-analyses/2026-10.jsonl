@@ -1022,3 +1022,16 @@
 {"txid":"ddce0b249518d93442b507adae3c1e6db5d723348c5336bb3097e872bf3777f6","status":"inconsistent"}
 {"txid":"0607e048138994ab0393897be0356eb8f0c63f119c5e283a6da1825d3fe56cb7","status":"identified","low":11308,"high":11308,"gains":[31,37,123,500,617,5000,5000]}
 {"txid":"70cfd5b2c2a766f31b538c0d965c7ac5ce413c16f0b156d2aedd7c566b7a5b13","status":"identified","low":6291,"high":6291,"gains":[16,19,64,64,128,500,500,5000]}
+{"txid":"49135a45db2d4c84df0cca72e626e5a228aa7a0224cfdf9dca4db9cf76ca6a20","status":"identified","low":7007,"high":7007,"gains":[16,19,64,128,500,1280,5000]}
+{"txid":"1811699f4466de1bbe624000e0dc4f9c092151cae049b0737706c9e5447d9216","status":"identified","low":5980,"high":5980,"gains":[12,15,19,124,310,500,5000]}
+{"txid":"61002cfa84cece2b608ad88a8f55012240d2c30ffbad834e273e2e269e8835de","status":"inconsistent"}
+{"txid":"fe6d895a8ef2e1fe2b12335c33a220e67ee4393377a8997de82bda8844baf8b0","status":"inconsistent"}
+{"txid":"176d0dfdcd5fac636fb16284934f9c8a221188c81f2799b85e2ea7fbeb00d62a","status":"identified","low":10542,"high":10542,"gains":[12,13,16,63,125,313,5000,5000]}
+{"txid":"1d4394ad343a6df7a65b457a25647d7495af2c7628cae7d8576784d85ccdea07","status":"ambiguous","low":8311,"high":9985,"gains":[16,19,63,500,2399,5000],"options":[[314],[1988]],"multiplicity":[1,1]}
+{"txid":"b1b822dc5a786c8a0adcbe2be027f6c5b900747cd04cdf95c3d3cce361dbf219","status":"inconsistent"}
+{"txid":"6ec0f823986b3a49fffda63fbb1bd10f75e09d9d432439b8f2262774420e9839","status":"identified","low":2045,"high":2045,"gains":[15,18,61,305,1219],"options":[[105,322],[122,305]],"multiplicity":[1,1]}
+{"txid":"35573235116aa0696c482a59ce73ef06b6ab0e037a608c1608e9976b62ae8c63","status":"ambiguous","low":22417,"high":121889,"gains":[1050,1050,1312,1575,1680,5250,5250],"options":[[5250],[104722]],"multiplicity":[1,1]}
+{"txid":"01cd9a5e250dae0e7333916c04360b1ad9d4c9df72d916a696576a99a2283f2b","status":"identified","low":8017,"high":8017,"gains":[481,859,1031,5646]}
+{"txid":"eef2b9d763dcb320a77345c94759315b4372b91589549b421285158ab7f7a0bb","status":"identified","low":34720,"high":34720,"gains":[1325,1590,5301,26504]}
+{"txid":"1159d7857171c1c2d1712592c1533b28fff7e16af593ba9218ca96a1d9d35826","status":"inconsistent"}
+{"txid":"0af8795fd6a7109d88fee4566f098c303100ed1adf1a064f6bc508bbe7c5528d","status":"inconsistent"}

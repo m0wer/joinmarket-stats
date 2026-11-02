@@ -16,3 +16,16 @@
 {"txid":"55f907090531ce230c777b07b752062c1d5af84c7e034f652d68c5755afd13cd","status":"inconsistent"}
 {"txid":"392786da1f57b5dcd3312763ccbaff7620aeb841b528ba40787fe69f6fbd53f3","status":"identified","low":1035,"high":1035,"gains":[21,69,100,345,500]}
 {"txid":"7c58a86f42831d11653eb3631d41dc01e2aa0566e09e120b8718928b30a127bf","status":"identified","low":7864,"high":7864,"gains":[0,46,58,460,2300,5000]}
+{"txid":"23ce2d781d3aa48754d2bc923f233936ca3e4cb04fbd8bb84263be75d7460c63","status":"identified","low":15162,"high":15162,"gains":[0,798,998,1197,1476,2713,3990,3990]}
+{"txid":"342113b05ac589ad232bb74e9450caff81dfc8e232b70e022b03d39268b6aa2f","status":"ambiguous","low":4993,"high":27693,"gains":[341,358,426,460,511,852,1704],"options":[[341],[23041]],"multiplicity":[1,1]}
+{"txid":"f1b1b340d1bade04a2f4225bfe7d32fb7d6ef1968f99595043bac9666b64287e","status":"identified","low":6703,"high":6703,"gains":[17,20,46,100,340,500,680,5000]}
+{"txid":"a32b3fff9882b7b4b0fe2f815f4428c09c3a950791768c0b36c491af5b3a35e1","status":"identified","low":7715,"high":7715,"gains":[32,57,69,229,458,2290,2290,2290]}
+{"txid":"4f0ed023807950bffeb52abe24f8248839b426d388bd08ba517cf7a920c0e4f4","status":"identified","low":6884,"high":6884,"gains":[14,17,21,69,69,500,500,694,5000]}
+{"txid":"b5f65a1bcc96e32dd1b73f1f08292e1b282b1834477e7f6bd45765804636545a","status":"identified","low":16916,"high":16916,"gains":[109,131,500,874,2186,4372,4372,4372]}
+{"txid":"cbb11db3f3c499ec36760edf8051ce8b407b56c87fac9436e4f45789b6c80caf","status":"identified","low":14705,"high":14705,"gains":[57,68,456,2281,2281,2281,2281,5000]}
+{"txid":"44dd06e5b4c38e8c7d2110ce4ef4247e25ee924494bcf862ccc4964469cd47bd","status":"inconsistent"}
+{"txid":"98f8cd58a3244c1f90b3c8a1be8980a3788f9b32d91dd9c07bf7d4a5fafbcc45","status":"identified","low":2639,"high":2639,"gains":[102,123,278,409,409,409,409,500]}
+{"txid":"39f484330009a1fa92680a7e930023e23b7f1305a8e727292bfa138702e1a028","status":"inconsistent"}
+{"txid":"2923125a3a220db9673c1f308047f0c2a5b024929a09016adc677c2448fe11ca","status":"inconsistent"}
+{"txid":"b7b152efab66b8fc847cfdc93a7ad6c2b7dfced5c0816c42426ff32e79f1f038","status":"identified","low":20,"high":20,"gains":[2,2,8,8]}
+{"txid":"2deacad431bbc2ccf254e52d7377edaa31aaf422107a483f861e33b75ed57bc3","status":"identified","low":41574,"high":41574,"gains":[244,977,977,4785,5000,9766,9766],"options":[[293,9766],[3730,6329]],"multiplicity":[1,1]}

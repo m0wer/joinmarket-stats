@@ -1,6 +1,6 @@
 # JoinMarket Stats
 
-A static JoinMarket mainnet dashboard: monthly CoinJoin-shaped activity, historical orderbooks, and modeled maker returns. CJ sizes and fees use satoshis; relative fees use percent, as makers configure them. Transaction counts and BTC volume share one chart; monthly maker fee totals have a separate chart with exact and estimated parts and 90% model intervals. Hover or tap anywhere in a chart's plot to inspect the nearest month's or day's values immediately, or Tab into a chart and use the arrow keys (Home/End jump to the first/last point; Escape dismisses the popup). Light and dark themes follow the system by default, with a saved manual override. No CDNs, analytics, remote fonts, frontend packages, or runtime backend. The generated dashboard is about 180 KB before compression.
+A static JoinMarket mainnet dashboard: monthly CoinJoin-shaped activity, historical orderbooks, and modeled maker returns. CJ sizes and fees use satoshis; relative fees use percent, as makers configure them. Transaction counts and BTC volume share one chart; monthly maker fee totals have a separate chart with exact and estimated parts and 90% model intervals. Hover or tap anywhere in a chart's plot to inspect the nearest month's or day's values immediately, or Tab into a chart and use the arrow keys (Home/End jump to the first/last point; Escape dismisses the popup). Light and dark themes follow the system by default, with a saved manual override. No CDNs, analytics, remote fonts, frontend packages, or runtime backend. The generated dashboard is about 280 KB before compression.
 
 ## Run locally
 
@@ -37,7 +37,7 @@ jmstats --data /path/to/archive render --output /path/to/site
 
 ## History and explicit bootstrap
 
-The imported full-block corpus begins January 1, 2025, with incremental scanning extending it to the current confirmed tip. The dashboard starts at the first scanned month (currently January 2025); years without observations are omitted from the selector. Gaps after that start and partial months remain labeled, never invented or displayed as zero. JSON and CSV exports retain unscanned months from 2020 for coverage tracking and explicit backfills. The prefilled hourly orderbook history starts May 22, 2026. Inspect the coverage line and `data/state.json` for the current corpus status.
+The full-block corpus covers January 2020 onward, with a December 2019 boundary margin and incremental scanning extending it to the last collected confirmed block. The original 2025+ analyzer import was extended by an explicit full-block backfill. The dashboard starts at the first scanned month (currently January 2020); years without observations are omitted from the selector. Gaps after that start and partial months remain labeled, never invented or displayed as zero. JSON and CSV exports retain unscanned months from 2020 for coverage tracking and explicit backfills. The prefilled hourly orderbook history starts May 22, 2026. Inspect the coverage line and `data/state.json` for the current corpus status.
 
 The initial corpus can be imported explicitly from the reference analyzer, without a runtime dependency on it:
 

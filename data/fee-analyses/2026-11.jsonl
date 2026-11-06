@@ -92,3 +92,17 @@
 {"txid":"37a9f694d5e4253334bea59656b28e80435ef091deeb16bde5e4d9d00acb3aae","status":"identified","low":8043,"high":8043,"gains":[0,103,735,735,1470,5000]}
 {"txid":"afe9ce16510b9a62b50c188a5378c52fe1133e983611cf994f6e57aedb937be6","status":"identified","low":6455,"high":6455,"gains":[0,69,1386,5000]}
 {"txid":"546fadfb7bd6d11733b08d53c11470d092b92ba7c0ae8cb7b490723186c40168","status":"identified","low":1631,"high":1631,"gains":[10,51,100,102,102,255,500,511]}
+{"txid":"402eab3cd306b5f48985f7d4fe64fbdc933b1880ad7a9816639e90bd2d501b9a","status":"identified","low":8978,"high":8978,"gains":[212,265,318,1061,2122,5000]}
+{"txid":"f99d99b392eb7b932da35212b4459c5a82ae231644cb9453e4ee6c3e067980e9","status":"inconsistent"}
+{"txid":"4e96ba8150d84cac201fe3f29f0d66abe610d5101f4bc79017919b4862c894de","status":"identified","low":13636,"high":13636,"gains":[203,242,290,967,967,967,5000,5000]}
+{"txid":"7db9d595bae739e64095ef18cc0a0da7fd0cc14b6014f322c64bd6176442f379","status":"identified","low":9040,"high":9040,"gains":[518,518,648,777,1399,2590,2590]}
+{"txid":"567a7561995d8e15b2135ee64a6f2de5bdbcfcfb86ba208a8f7c3ff3f6e63a64","status":"identified","low":10103,"high":10103,"gains":[121,145,4837,5000]}
+{"txid":"a42b10a6d185e3b9e83ab52d77a1021aa4f59e56827b9b722306e76b5c650c83","status":"inconsistent"}
+{"txid":"1d2ea29594598a90d2381bdbae6aca547c83a8bb15f5acbdc4eea210862ad9de","status":"ambiguous","low":3656,"high":23027,"gains":[0,155,221,276,309,331,1038,1105],"options":[[221],[19592]],"multiplicity":[1,1]}
+{"txid":"e9a481041c16d4f0c710ef9f7f8f5c563a90c26284c89a5e7f0a056539f4aa11","status":"inconsistent"}
+{"txid":"96c92668f7f67909441dc49bc22ce9e4d8e7a738d7afb9f7f32b90b2b840098e","status":"inconsistent"}
+{"txid":"8783e8a9c8a7e904052771dc1b147a551c5e36705a571a917879f93fba43d174","status":"identified","low":1272,"high":1272,"gains":[4,5,6,20,39,98,100,500,500]}
+{"txid":"e98db8cb43f1ccda4dca8e1d3236da86f274ff937e5cf9d35c995ab0aac50e94","status":"inconsistent"}
+{"txid":"5e9fb2f9eef6ba5fda1a8762bdbf554eeed416e9fc82c23e9527864013a991c0","status":"inconsistent"}
+{"txid":"d07fe5162944d0b5ac83d204b6ab2c36db43783206756bb06862e59df649386c","status":"identified","low":705,"high":705,"gains":[3,4,66,132,500]}
+{"txid":"8a62cae92872e9b47c07fde1fcffa7488b7747158675d16d6c6221304a8e9d6d","status":"unresolved","reason":"candidates"}

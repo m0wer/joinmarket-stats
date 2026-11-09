@@ -42084,5 +42084,16 @@
     "locked_sats": 43345978748,
     "bond_count": 72,
     "verification_available": true
+  },
+  {
+    "as_of": "2026-11-09T03:29:43.755679Z",
+    "makers": 101,
+    "offer_count": 112,
+    "advertised_bonded_makers": 72,
+    "bonded_makers": 72,
+    "reported_locked_sats": 43054285415,
+    "locked_sats": 43054285415,
+    "bond_count": 69,
+    "verification_available": true
   }
 ]
